@@ -5,7 +5,7 @@ var Buffer = require('buffer').Buffer;
 var constants = require('constants');
 var readStream = new stream.Readable();
 
-var FFI = require("node-ffi");
+var FFI = require("ffi");
 var libc = new FFI.Library(null, {
   "system": ["int32", ["string"]]
 });

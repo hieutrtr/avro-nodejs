@@ -1,0 +1,11 @@
+{
+  "type": "record", 
+  "name": "cpx",
+  "fields" : [
+    {"name": "re", "type": ["double", "null"]},    
+    {"name": "im", "type" : "double", "default" : "2.0"},
+    {"name": "name", "type": "string", "default" : "'hello'"},
+    {"name": "array", "type": [{ "type": "array", "items": "string" }, "null"], "default": "null"},
+    {"name": "map", "type": [{ "type": "map", "values": "int"}]}
+  ]
+}

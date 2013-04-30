@@ -1,0 +1,14 @@
+{
+  "name": "AvroNode",
+  "version": "0.0.1",
+  "author": {
+    "name": "Benjamin Metzger",
+    "email": "benjamindmetzger@gmail.com"
+  },
+
+  "dependencies": {
+    "ffi": "*"
+  }
+
+
+}

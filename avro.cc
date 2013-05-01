@@ -26,11 +26,11 @@
 
 using namespace v8;
 
-Handle<Value> DecodeAvro (const avro::GenericDatum& datum);
-avro::GenericDatum& EncodeAvro (Handle<Value> datum);
 std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
 avro::StreamWriter writer = avro::StreamWriter(*output);
 const avro::ValidSchema *schema = NULL;
+
+
 /*
 Handle<Value> Decode(const Arguments& args){
   HandleScope scope;
@@ -95,6 +95,31 @@ void DecodeFile(const char* filename, Local<Function> cb){
   }
 
   cb->Call(Context::GetCurrent()->Global(), length, argv);
+}
+
+void EncodeFile(const char* filename, Local<Function> cb, Local<Object> data){
+
+}
+
+Handle<Value> SetSchema(const Arguments& args){
+  if (args.Length() != 1) {
+    ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+    return scope.Close(Undefined());
+  }
+
+  if(args[0]->IsString()){
+    // get the param
+    v8::String::Utf8Value param1(args[0]->ToString());
+
+    DecodeFile(*param1, cb);
+  }else{
+    ThrowException(Exception::TypeError(String::New("Schema Must be a string")));
+    return scope.Close(Undefined());
+  }
+}
+
+Handle<Value> GetSchema(const Arguments& args){
+
 }
 
 Handle<Value> Decode(const Arguments& args) {

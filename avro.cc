@@ -79,6 +79,7 @@ void DecodeFile(const char* filename, Local<Function> cb){
   Local<Value> argv[2];
   try{
     avro::DataFileReader<avro::GenericDatum> dfr(filename);
+    schema = dfr.dataSchema();
     avro::GenericDatum datum(dfr.dataSchema());
     Local<Array> datumArray = Array::New();
 
@@ -122,18 +123,20 @@ Handle<Value> SetSchema(const Arguments& args){
   }
   return scope.Close(Undefined());
 }
-
+  
 Handle<Value> GetSchema(const Arguments& args){
+
   HandleScope scope;
+  /*
   Local<Function> cb = Local<Function>::Cast(args[1]);
   Local<Value> argv[1];
-
+  */
   std::ostringstream oss(std::ios_base::out);
   schema.toJson(oss);
-  std::string jsonSchema = oss.str();
-  argv[0] = Local<Value>::New(String::New(oss.str().c_str())); 
-  cb->Call(Context::GetCurrent()->Global(), 1, argv);
-  return scope.Close(Undefined());
+  //argv[0] = Local<Value>::New(String::New(oss.str().c_str())); 
+  //cb->Call(Context::GetCurrent()->Global(), 1, argv);
+  
+  return scope.Close(String::New(oss.str().c_str()));
 }
 
 Handle<Value> Decode(const Arguments& args) {
@@ -303,14 +306,18 @@ Handle<Value> convertAvro(const avro::GenericDatum& datum){
 
 
 }
-
-
-
 void init(Handle<Object> exports) {
   exports->Set(String::NewSymbol("decode"),
     FunctionTemplate::New(Decode)->GetFunction());
+
   exports->Set(String::NewSymbol("encode"),
     FunctionTemplate::New(Encode)->GetFunction());
+
+  exports->Set(String::NewSymbol("setSchema"),
+    FunctionTemplate::New(SetSchema)->GetFunction());
+
+  exports->Set(String::NewSymbol("getSchema"),
+    FunctionTemplate::New(GetSchema)->GetFunction());
 }
 
 NODE_MODULE(avro, init)

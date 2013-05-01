@@ -21,6 +21,10 @@ avro.decode("test.bin", function(event, data){
   console.log(data.length);
 });
 
+//avro.setSchema("cpx.json");
+
+console.log(avro.getSchema());
+
 /*
 fs.open("test.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){

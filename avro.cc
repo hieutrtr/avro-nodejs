@@ -26,10 +26,11 @@
 
 using namespace v8;
 
+Handle<Value> DecodeAvro (const avro::GenericDatum& datum);
+avro::GenericDatum& EncodeAvro (Handle<Value> datum);
 std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
 avro::StreamWriter writer = avro::StreamWriter(*output);
-const avro::ValidSchema *schema = NULL;
-
+avro::ValidSchema schema;
 
 /*
 Handle<Value> Decode(const Arguments& args){
@@ -102,6 +103,8 @@ void EncodeFile(const char* filename, Local<Function> cb, Local<Object> data){
 }
 
 Handle<Value> SetSchema(const Arguments& args){
+  HandleScope scope;
+
   if (args.Length() != 1) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
@@ -110,16 +113,27 @@ Handle<Value> SetSchema(const Arguments& args){
   if(args[0]->IsString()){
     // get the param
     v8::String::Utf8Value param1(args[0]->ToString());
+    std::ifstream ifs(*param1);
+    avro::compileJsonSchema(ifs, schema);
 
-    DecodeFile(*param1, cb);
   }else{
     ThrowException(Exception::TypeError(String::New("Schema Must be a string")));
     return scope.Close(Undefined());
   }
+  return scope.Close(Undefined());
 }
 
 Handle<Value> GetSchema(const Arguments& args){
+  HandleScope scope;
+  Local<Function> cb = Local<Function>::Cast(args[1]);
+  Local<Value> argv[1];
 
+  std::ostringstream oss(std::ios_base::out);
+  schema.toJson(oss);
+  std::string jsonSchema = oss.str();
+  argv[0] = Local<Value>::New(String::New(oss.str().c_str())); 
+  cb->Call(Context::GetCurrent()->Global(), 1, argv);
+  return scope.Close(Undefined());
 }
 
 Handle<Value> Decode(const Arguments& args) {

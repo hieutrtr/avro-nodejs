@@ -48,12 +48,12 @@ typedef boost::array<uint8_t, 16> DataFileSync;
  */
 
 class AVRO_DECL DataStreamWriterBase : boost::noncopyable {
+    std::auto_ptr<OutputStream> stream_;
+    std::auto_ptr<OutputStream> buffer_;
     const ValidSchema schema_;
     const EncoderPtr encoderPtr_;
     const size_t syncInterval_;
 
-    std::auto_ptr<OutputStream> stream_;
-    std::auto_ptr<OutputStream> buffer_;
     const DataFileSync sync_;
     int64_t objectCount_;
 
@@ -159,7 +159,7 @@ public:
  * The type independent portion of rader.
  */
 class AVRO_DECL DataStreamReaderBase : boost::noncopyable {
-    const std::auto_ptr<InputStream> stream_;
+
     const DecoderPtr decoder_;
     int64_t objectCount_;
     bool eof_;
@@ -167,7 +167,6 @@ class AVRO_DECL DataStreamReaderBase : boost::noncopyable {
     ValidSchema readerSchema_;
     ValidSchema dataSchema_;
     DecoderPtr dataDecoder_;
-    std::auto_ptr<InputStream> dataStream_;
     typedef std::map<std::string, std::vector<uint8_t> > Metadata;
 
     Metadata metadata_;
@@ -177,6 +176,9 @@ class AVRO_DECL DataStreamReaderBase : boost::noncopyable {
 
     bool readDataBlock();
 public:
+
+    const std::auto_ptr<InputStream> stream_;
+    std::auto_ptr<InputStream> dataStream_;
     /**
      * Returns the current decoder for this reader.
      */

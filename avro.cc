@@ -30,61 +30,104 @@ Handle<Value> DecodeAvro (const avro::GenericDatum& datum);
 avro::GenericDatum& EncodeAvro (Handle<Value> datum);
 std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
 avro::StreamWriter writer = avro::StreamWriter(*output);
-
+const avro::ValidSchema *schema = NULL;
+/*
 Handle<Value> Decode(const Arguments& args){
   HandleScope scope;
+  Local<Array> datumArray = Array::New();
 
-  std::cout << "after schema" << std::endl;
+  //std::cout << "after schema" << std::endl;
 
-  std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*writer.out_);
+  std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*output);
   avro::DecoderPtr d = avro::binaryDecoder();
   d->init(*in);
+  try
+  {
+    std::auto_ptr<avro::DataStreamReaderBase> dfrb(new avro::DataStreamReaderBase(in));
+    std::cout << dfrb.get() << std::endl;
+    avro::DataStreamReader<avro::GenericDatum> dfr(dfrb);
+    std::cout << &dfr.base_ << std::endl;
+    //avro::DataFileReader<avro::GenericDatum> dfr("test.bin");
+    // we can derive the schema from the data file like so.
+    if(schema == NULL){
+      std::cout << "no schema yet." << std::endl;
+      schema = &(dfr.dataSchema());
 
-  std::auto_ptr<avro::DataStreamReaderBase> dfrb(new avro::DataStreamReaderBase(in));
+    }
 
-  avro::DataStreamReader<avro::GenericDatum> dfr(dfrb);
-  //avro::DataFileReader<avro::GenericDatum> dfr("test.bin");
-  // we can derive the schema from the data file like so. 
-  avro::GenericDatum datum(dfr.dataSchema());
-  int i = 0;
-  Local<Array> datumArray = Array::New();
-  while(dfr.read(datum)){
-    datumArray->Set(i, DecodeAvro(datum));
-    i++;
+    avro::GenericDatum datum(dfr.dataSchema());
+    int i = 0;
+    while(dfr.read(datum)){
+      datumArray->Set(i, DecodeAvro(datum));
+      //size_t outputLen = dfrb->stream_->byteCount();
+      //std::cout << outputLen << std::endl;
+      i++;
+    }
   }
-  return scope.Close(datumArray);
-  //return scope.Close(Object::New());
+  catch (std::exception &e) {
+      std::cerr<< "error" << e.what() << std::endl;
+  }
 
+  return scope.Close(datumArray);
+}
+*/
+
+void DecodeFile(const char* filename, Local<Function> cb){
+  const unsigned argc = 1;
+  int length = 2;
+  Local<Value> argv[2];
+  try{
+    avro::DataFileReader<avro::GenericDatum> dfr(filename);
+    avro::GenericDatum datum(dfr.dataSchema());
+    Local<Array> datumArray = Array::New();
+
+    int i = 0;
+    while(dfr.read(datum)){
+      datumArray->Set(i, DecodeAvro(datum));
+      i++;
+    }
+
+    argv[0] = Local<Value>::New(String::New("file end")); 
+    argv[1] = Local<Value>::New(datumArray);
+  }catch(std::exception &e){
+    argv[0] = Local<Value>::New(String::New(e.what()));
+    length = 1;
+  }
+
+  cb->Call(Context::GetCurrent()->Global(), length, argv);
 }
 
-Handle<Value> DecodeAppend(const Arguments& args) {
+Handle<Value> Decode(const Arguments& args) {
   HandleScope scope;
 
-  //avro::ValidSchema cpxSchema;
-  //avro::compileJsonSchema(ifs, cpxSchema);  //std::ifstream in("cpx.json");
-
-  if (args.Length() != 1) {
+  if (args.Length() > 2) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
   }
 
+  Local<Function> cb = Local<Function>::Cast(args[1]);
 
-  if (!args[0]->IsObject()) {
-    ThrowException(Exception::TypeError(String::New("Wrong arguments")));
-    return scope.Close(Undefined());
+  if(args[0]->IsString()){
+    // get the param
+    v8::String::Utf8Value param1(args[0]->ToString());
+
+    DecodeFile(*param1, cb);
   }
 
-  Local<Object> obj = args[0]->ToObject();
+  if(args[0]->IsObject()){
+    Local<Object> obj = args[0]->ToObject();
 
-  //get length of array
-  int len = obj->GetIndexedPropertiesExternalArrayDataLength();
-  const uint8_t *buffer = static_cast<uint8_t*>(obj->GetIndexedPropertiesExternalArrayData()); 
+    //get length of array
+    int len = obj->GetIndexedPropertiesExternalArrayDataLength();
+    const uint8_t *buffer = static_cast<uint8_t*>(obj->GetIndexedPropertiesExternalArrayData());    
+  }
 
+/*
   writer.writeBytes(buffer, len);
   writer.flush();
-  std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(buffer, len);
+*/
 
-  return scope.Close(Number::New(len));
+  return scope.Close(Undefined());
 }
 
 
@@ -101,30 +144,32 @@ Handle<Value> Encode(const Arguments& args){
   std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
   avro::EncoderPtr e = avro::binaryEncoder();
   e->init(*out);
-  c::cpx c1;
-  c1.im = 2.13;
-
-  //setup array test
-  std::vector<std::string> vec ;
-
-  vec.push_back("16");
-  vec.push_back("2");
-  vec.push_back("77");
-  vec.push_back("29");
-  c1.array.set_array(vec);
-
-  //setup map test
-  std::map<std::string, int> map ;
-  map.insert(std::make_pair("first",1));
-  map.insert(std::make_pair("second",2));
-  map.insert(std::make_pair("third",3));
-
-  c1.map.set_map(map);
-
-  avro::encode(*e, c1);
-
   avro::DataFileWriter<c::cpx> dfw("test.bin", cpxSchema);
-  dfw.write(c1);
+  c::cpx c1;
+  for(int i = 0;i<100; i++){
+    c1.im = i;
+    //setup array test
+    std::vector<std::string> vec ;
+
+    vec.push_back("16");
+    vec.push_back("2");
+    vec.push_back("77");
+    vec.push_back("29");
+    c1.array.set_array(vec);
+
+    //setup map test
+    std::map<std::string, int> map ;
+    map.insert(std::make_pair("first",1));
+    map.insert(std::make_pair("second",2));
+    map.insert(std::make_pair("third",3));
+
+    c1.map.set_map(map);
+
+    avro::encode(*e, c1);
+
+    dfw.write(c1);
+  }
+  
   dfw.close();
 
   return scope.Close(Object::New());
@@ -224,9 +269,7 @@ Handle<Value> convertAvro(const avro::GenericDatum& datum){
 
 void init(Handle<Object> exports) {
   exports->Set(String::NewSymbol("decode"),
-    FunctionTemplate::New(Decode)->GetFunction());  
-  exports->Set(String::NewSymbol("decodeAppend"),
-    FunctionTemplate::New(DecodeAppend)->GetFunction());
+    FunctionTemplate::New(Decode)->GetFunction());
   exports->Set(String::NewSymbol("encode"),
     FunctionTemplate::New(Encode)->GetFunction());
 }

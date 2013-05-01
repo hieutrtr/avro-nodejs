@@ -1,5 +1,5 @@
 var fs = require('fs');
-var addon = require('./build/Release/avro');
+var avro = require('./build/Release/avro');
 var stream = require('stream');
 var Buffer = require('buffer').Buffer;
 var constants = require('constants');
@@ -13,6 +13,15 @@ var libc = new FFI.Library(null, {
 var run = libc.system;
 run("avrogencpp -i cpx.json -o cpx.hh -n c");
 var output = "";
+
+//simple file read case
+
+avro.decode("test.bin", function(event, data){
+  console.log(event);
+  console.log(data.length);
+});
+
+/*
 fs.open("test.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){
     var i=0
@@ -21,21 +30,16 @@ fs.open("test.bin", 'r', function(status, fd) {
 
     console.log('.'+"test.bin"+' '+s);
     for(i=0;i<s;){
-
       var readbytes = fs.readSync(fd,buffer,0,buffer.length,i);
-      //console.log(buffer.toString('utf8'));
-      addon.decodeAppend(buffer.slice(0,readbytes));
-      //console.log(buffer);
-      //console.log(buffer.toString('utf8', 0, readbytes));
+      avro.decodeAppend(buffer.slice(0,readbytes));
+      console.log(avro.decode().length);
       i=i+buffer.length;
     }
-    console.log(addon.decode());
+    //console.log(addon.decode().length);
 
     fs.close(fd)
   })
 });
 console.log("Calling Addon end");
-//console.log(addon.decode());
 
-//console.log(addon.decode()); // 'world'
-//console.log(addon.encode({}));
+*/

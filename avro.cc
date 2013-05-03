@@ -25,20 +25,22 @@
 #include <fstream>
 # include <stdio.h>
 #include <pthread.h>
-#define BufferSize 2000
 
 using namespace v8;
 
 
 Persistent<String> on_schema;
-Persistent<Object> module_handle;
 Persistent<String> on_datum;
+Persistent<String> on_error;
+
+Persistent<Object> module_handle;
 
 Handle<Value> DecodeAvro (const avro::GenericDatum& datum);
 avro::GenericDatum& EncodeAvro (Handle<Value> datum);
 
 void OnSchema();
 void OnDatum(Handle<Value> datum);
+void OnError(const char *error);
 
 
 std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
@@ -97,7 +99,7 @@ void DecodeFile(const char* filename){
       OnDatum(DecodeAvro(datum));
     }
   }catch(std::exception &e){
-
+    OnError(e.what());
   }
 
 }
@@ -106,6 +108,10 @@ void EncodeFile(const char* filename, Local<Function> cb, Local<Object> data){
 
 }
 
+/**
+ * [A callback for when the schema has been set. Can be set either by a stream, file or by manually setting 
+ * the Schema by SetSchema(filename)]
+ */
 void OnSchema(){
   HandleScope scope;
   // locate callback from the module context if defined by script
@@ -128,6 +134,10 @@ void OnSchema(){
   callback->Call(module_handle, 1, argv);
 }
 
+/**
+ * [OnDatum callback for when a datum has been created from either file or stream decode]
+ * @param datum [description]
+ */
 void OnDatum(Handle<Value> datum){
   HandleScope scope;
   // locate callback from the module context if defined by script
@@ -144,6 +154,32 @@ void OnDatum(Handle<Value> datum){
   // prepare arguments for the callback
   Local<Value> argv[1];
   argv[0] = Local<Value>::New(datum);
+
+  callback->Call(module_handle, 1, argv);
+}
+
+/**
+ * [OnError description]
+ * @param error [description]
+ */
+void OnError(const char *error){
+  HandleScope scope;
+  // locate callback from the module context if defined by script
+  // example = require('example')
+  // example.onschema = function( ... ) { ..
+  Local<Value> callback_v = module_handle->Get(on_error);
+  //If no function is defined in the javascript for handling error
+  // we throw an error. 
+  if (!callback_v->IsFunction()) {
+    ThrowException(Exception::TypeError(String::New(error)));
+    return;
+  }
+
+  Local<Function> callback = Local<Function>::Cast(callback_v);
+
+  // prepare arguments for the callback
+  Local<Value> argv[1];
+  argv[0] = Local<Value>::New(String::New(error));
 
   callback->Call(module_handle, 1, argv);
 }
@@ -260,6 +296,9 @@ avro::GenericDatum& EncodeAvro(Handle<Value> datum){
 
 }
 
+/**
+ * converts a GenericDatum into a v8 object that can be passed back to javascript
+ */
 Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
     Handle<Object> obj = Object::New();
 
@@ -358,6 +397,8 @@ void init(Handle<Object> target) {
   on_schema = NODE_PSYMBOL("onschema");
 
   on_datum = NODE_PSYMBOL("ondatum");
+
+  on_error = NODE_PSYMBOL("onerror");
 
   module_handle = Persistent<Object>::New(target);
 

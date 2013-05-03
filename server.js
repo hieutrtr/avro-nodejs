@@ -15,7 +15,9 @@ run("avrogencpp -i cpx.json -o cpx.hh -n c");
 var output = "";
 
 //simple file read case
-
+avro.onerror = function(error){
+  console.log(error);
+}
 
 avro.onschema = function(schema){
   console.log(schema);
@@ -27,7 +29,7 @@ avro.ondatum = function(datum){
 
 //avro.setSchema("cpx.json");
 
-avro.decode("test.bin");
+avro.decode("test.bi");
 
 
 //console.log(avro.getSchema());

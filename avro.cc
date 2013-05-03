@@ -36,7 +36,6 @@ Persistent<String> on_error;
 Persistent<Object> module_handle;
 
 Handle<Value> DecodeAvro (const avro::GenericDatum& datum);
-avro::GenericDatum& EncodeAvro (Handle<Value> datum);
 
 void OnSchema();
 void OnDatum(Handle<Value> datum);
@@ -87,22 +86,6 @@ Handle<Value> Decode(const Arguments& args){
   return scope.Close(datumArray);
 }
 */
-
-void DecodeFile(const char* filename){
-  try{
-    avro::DataFileReader<avro::GenericDatum> dfr(filename);
-    schema = dfr.dataSchema();
-    OnSchema();
-    avro::GenericDatum datum(dfr.dataSchema());
-
-    while(dfr.read(datum)){
-      OnDatum(DecodeAvro(datum));
-    }
-  }catch(std::exception &e){
-    OnError(e.what());
-  }
-
-}
 
 void EncodeFile(const char* filename, Local<Function> cb, Local<Object> data){
 
@@ -207,17 +190,16 @@ Handle<Value> SetSchema(const Arguments& args){
 }
   
 Handle<Value> GetSchema(const Arguments& args){
-
   HandleScope scope;
   std::ostringstream oss(std::ios_base::out);
   schema.toJson(oss);
   return scope.Close(String::New(oss.str().c_str()));
 }
 
-Handle<Value> Decode(const Arguments& args) {
+Handle<Value> DecodeFile(const Arguments& args) {
   HandleScope scope;
 
-  if (args.Length() > 2) {
+  if (args.Length() > 1) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
   }
@@ -226,23 +208,23 @@ Handle<Value> Decode(const Arguments& args) {
 
   if(args[0]->IsString()){
     // get the param
-    v8::String::Utf8Value param1(args[0]->ToString());
+    v8::String::Utf8Value filename(args[0]->ToString());
 
-    DecodeFile(*param1);
+    try{
+      avro::DataFileReader<avro::GenericDatum> dfr(*filename);
+      schema = dfr.dataSchema();
+      OnSchema();
+      avro::GenericDatum datum(dfr.dataSchema());
+
+      while(dfr.read(datum)){
+        OnDatum(DecodeAvro(datum));
+      }
+    }catch(std::exception &e){
+      OnError(e.what());
+    }
+  }else{
+    OnError("Wrong Argument. Must be string for filename");
   }
-
-  if(args[0]->IsObject()){
-    Local<Object> obj = args[0]->ToObject();
-
-    //get length of array
-    int len = obj->GetIndexedPropertiesExternalArrayDataLength();
-    const uint8_t *buffer = static_cast<uint8_t*>(obj->GetIndexedPropertiesExternalArrayData());    
-  }
-
-/*
-  writer.writeBytes(buffer, len);
-  writer.flush();
-*/
 
   return scope.Close(Undefined());
 }
@@ -250,18 +232,11 @@ Handle<Value> Decode(const Arguments& args) {
 
 Handle<Value> Encode(const Arguments& args){
   HandleScope scope;
-  std::ifstream ifs("cpx.json");
-
-  avro::ValidSchema cpxSchema;
-  avro::compileJsonSchema(ifs, cpxSchema);  //std::ifstream in("cpx.json");
-
-  //avro::ValidSchema cpxSchema;
-  //avro::compileJsonSchema(in, cpxSchema);
 
   std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
   avro::EncoderPtr e = avro::binaryEncoder();
   e->init(*out);
-  avro::DataFileWriter<c::cpx> dfw("test.bin", cpxSchema);
+  avro::DataFileWriter<c::cpx> dfw("test.bin", schema);
   c::cpx c1;
   for(int i = 0;i<100; i++){
     c1.im = i;
@@ -290,10 +265,6 @@ Handle<Value> Encode(const Arguments& args){
   dfw.close();
 
   return scope.Close(Object::New());
-}
-
-avro::GenericDatum& EncodeAvro(Handle<Value> datum){
-
 }
 
 /**
@@ -347,7 +318,6 @@ Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
       const avro::GenericDatum &itDatum = * it;
       datumArray->Set(i, DecodeAvro(itDatum));
       i++;
-      //DecodeAvro(*it);
     }
     return datumArray;
   }else if(datum.type() == avro::AVRO_MAP){
@@ -380,19 +350,35 @@ Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
   return obj;
 }
 
-Handle<Value> convertAvro(const avro::GenericDatum& datum){
+Handle<Value> DecodeBytes(const Arguments& args){
+  HandleScope scope;
 
 
+  return scope.Close(Undefined());
 }
+
+/**
+ * 
+ */
+Handle<Value> EncodeBytes(const Arguments& args){
+  HandleScope scope;
+
+  return scope.Close(Undefined());
+}
+
 void init(Handle<Object> target) {
 
-  NODE_SET_METHOD(target, "decode", Decode);
+  NODE_SET_METHOD(target, "decode", DecodeFile);
   
   NODE_SET_METHOD(target, "encode", Encode);
   
   NODE_SET_METHOD(target, "setSchema", SetSchema);
 
   NODE_SET_METHOD(target, "getSchema", GetSchema);
+
+  NODE_SET_METHOD(target, "decodeBytes", DecodeBytes);
+
+  NODE_SET_METHOD(target, "encodeBytes", EncodeBytes);
 
   on_schema = NODE_PSYMBOL("onschema");
 

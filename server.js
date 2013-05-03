@@ -16,14 +16,21 @@ var output = "";
 
 //simple file read case
 
-avro.decode("test.bin", function(event, data){
-  console.log(event);
-  console.log(data.length);
-});
+
+avro.onschema = function(schema){
+  console.log(schema);
+}
+
+avro.ondatum = function(datum){
+  console.log(datum);
+}
 
 //avro.setSchema("cpx.json");
 
-console.log(avro.getSchema());
+avro.decode("test.bin");
+
+
+//console.log(avro.getSchema());
 
 /*
 fs.open("test.bin", 'r', function(status, fd) {
@@ -45,5 +52,4 @@ fs.open("test.bin", 'r', function(status, fd) {
   })
 });
 console.log("Calling Addon end");
-
 */

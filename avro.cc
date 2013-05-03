@@ -23,11 +23,24 @@
 
 #include <iostream>
 #include <fstream>
+# include <stdio.h>
+#include <pthread.h>
+#define BufferSize 2000
 
 using namespace v8;
 
+
+Persistent<String> on_schema;
+Persistent<Object> module_handle;
+Persistent<String> on_datum;
+
 Handle<Value> DecodeAvro (const avro::GenericDatum& datum);
 avro::GenericDatum& EncodeAvro (Handle<Value> datum);
+
+void OnSchema();
+void OnDatum(Handle<Value> datum);
+
+
 std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
 avro::StreamWriter writer = avro::StreamWriter(*output);
 avro::ValidSchema schema;
@@ -73,34 +86,66 @@ Handle<Value> Decode(const Arguments& args){
 }
 */
 
-void DecodeFile(const char* filename, Local<Function> cb){
-  const unsigned argc = 1;
-  int length = 2;
-  Local<Value> argv[2];
+void DecodeFile(const char* filename){
   try{
     avro::DataFileReader<avro::GenericDatum> dfr(filename);
     schema = dfr.dataSchema();
+    OnSchema();
     avro::GenericDatum datum(dfr.dataSchema());
-    Local<Array> datumArray = Array::New();
 
-    int i = 0;
     while(dfr.read(datum)){
-      datumArray->Set(i, DecodeAvro(datum));
-      i++;
+      OnDatum(DecodeAvro(datum));
     }
-
-    argv[0] = Local<Value>::New(String::New("file end")); 
-    argv[1] = Local<Value>::New(datumArray);
   }catch(std::exception &e){
-    argv[0] = Local<Value>::New(String::New(e.what()));
-    length = 1;
+
   }
 
-  cb->Call(Context::GetCurrent()->Global(), length, argv);
 }
 
 void EncodeFile(const char* filename, Local<Function> cb, Local<Object> data){
 
+}
+
+void OnSchema(){
+  HandleScope scope;
+  // locate callback from the module context if defined by script
+  // example = require('example')
+  // example.onschema = function( ... ) { ..
+  Local<Value> callback_v = module_handle->Get(on_schema);
+  if (!callback_v->IsFunction()) {
+    // callback not defined, ignore
+    return;
+  }
+
+  Local<Function> callback = Local<Function>::Cast(callback_v);
+
+  std::ostringstream oss(std::ios_base::out);
+  schema.toJson(oss);
+  // prepare arguments for the callback
+  Local<Value> argv[1];
+  argv[0] = Local<Value>::New(String::New(oss.str().c_str()));
+
+  callback->Call(module_handle, 1, argv);
+}
+
+void OnDatum(Handle<Value> datum){
+  HandleScope scope;
+  // locate callback from the module context if defined by script
+  // example = require('example')
+  // example.onschema = function( ... ) { ..
+  Local<Value> callback_v = module_handle->Get(on_datum);
+  if (!callback_v->IsFunction()) {
+    // callback not defined, ignore
+    return;
+  }
+
+  Local<Function> callback = Local<Function>::Cast(callback_v);
+
+  // prepare arguments for the callback
+  Local<Value> argv[1];
+  argv[0] = Local<Value>::New(datum);
+
+  callback->Call(module_handle, 1, argv);
 }
 
 Handle<Value> SetSchema(const Arguments& args){
@@ -116,6 +161,7 @@ Handle<Value> SetSchema(const Arguments& args){
     v8::String::Utf8Value param1(args[0]->ToString());
     std::ifstream ifs(*param1);
     avro::compileJsonSchema(ifs, schema);
+    OnSchema();
 
   }else{
     ThrowException(Exception::TypeError(String::New("Schema Must be a string")));
@@ -127,15 +173,8 @@ Handle<Value> SetSchema(const Arguments& args){
 Handle<Value> GetSchema(const Arguments& args){
 
   HandleScope scope;
-  /*
-  Local<Function> cb = Local<Function>::Cast(args[1]);
-  Local<Value> argv[1];
-  */
   std::ostringstream oss(std::ios_base::out);
   schema.toJson(oss);
-  //argv[0] = Local<Value>::New(String::New(oss.str().c_str())); 
-  //cb->Call(Context::GetCurrent()->Global(), 1, argv);
-  
   return scope.Close(String::New(oss.str().c_str()));
 }
 
@@ -153,7 +192,7 @@ Handle<Value> Decode(const Arguments& args) {
     // get the param
     v8::String::Utf8Value param1(args[0]->ToString());
 
-    DecodeFile(*param1, cb);
+    DecodeFile(*param1);
   }
 
   if(args[0]->IsObject()){
@@ -306,18 +345,22 @@ Handle<Value> convertAvro(const avro::GenericDatum& datum){
 
 
 }
-void init(Handle<Object> exports) {
-  exports->Set(String::NewSymbol("decode"),
-    FunctionTemplate::New(Decode)->GetFunction());
+void init(Handle<Object> target) {
 
-  exports->Set(String::NewSymbol("encode"),
-    FunctionTemplate::New(Encode)->GetFunction());
+  NODE_SET_METHOD(target, "decode", Decode);
+  
+  NODE_SET_METHOD(target, "encode", Encode);
+  
+  NODE_SET_METHOD(target, "setSchema", SetSchema);
 
-  exports->Set(String::NewSymbol("setSchema"),
-    FunctionTemplate::New(SetSchema)->GetFunction());
+  NODE_SET_METHOD(target, "getSchema", GetSchema);
 
-  exports->Set(String::NewSymbol("getSchema"),
-    FunctionTemplate::New(GetSchema)->GetFunction());
+  on_schema = NODE_PSYMBOL("onschema");
+
+  on_datum = NODE_PSYMBOL("ondatum");
+
+  module_handle = Persistent<Object>::New(target);
+
 }
 
 NODE_MODULE(avro, init)

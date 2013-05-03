@@ -2,15 +2,6 @@ var fs = require('fs');
 var avro = require('./build/Release/avro');
 var Buffer = require('buffer').Buffer;
 
-var FFI = require("ffi");
-var libc = new FFI.Library(null, {
-  "system": ["int32", ["string"]]
-});
-
-var run = libc.system;
-run("avrogencpp -i cpx.json -o cpx.hh -n c");
-var output = "";
-
 //simple file read case
 avro.onerror = function(error){
   console.log(error);
@@ -26,7 +17,7 @@ avro.ondatum = function(datum){
 
 //avro.setSchema("cpx.json");
 
-avro.decodeFile("test.bi");
+avro.decode("test.bi");
 
 
 //console.log(avro.getSchema());

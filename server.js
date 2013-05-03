@@ -1,9 +1,6 @@
 var fs = require('fs');
 var avro = require('./build/Release/avro');
-var stream = require('stream');
 var Buffer = require('buffer').Buffer;
-var constants = require('constants');
-var readStream = new stream.Readable();
 
 var FFI = require("ffi");
 var libc = new FFI.Library(null, {
@@ -29,7 +26,7 @@ avro.ondatum = function(datum){
 
 //avro.setSchema("cpx.json");
 
-avro.decode("test.bi");
+avro.decodeFile("test.bi");
 
 
 //console.log(avro.getSchema());

@@ -17,8 +17,7 @@ avro.ondatum = function(datum){
 
 //avro.setSchema("cpx.json");
 
-avro.decode("test.bi");
-
+avro.decode("test.bin");
 
 //console.log(avro.getSchema());
 

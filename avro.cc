@@ -46,12 +46,9 @@ std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
 avro::StreamWriter writer = avro::StreamWriter(*output);
 avro::ValidSchema schema;
 
-/*
-Handle<Value> Decode(const Arguments& args){
-  HandleScope scope;
-  Local<Array> datumArray = Array::New();
 
-  //std::cout << "after schema" << std::endl;
+Handle<Value> DecodeBytes(const Arguments& args){
+  HandleScope scope;
 
   std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*output);
   avro::DecoderPtr d = avro::binaryDecoder();
@@ -59,36 +56,26 @@ Handle<Value> Decode(const Arguments& args){
   try
   {
     std::auto_ptr<avro::DataStreamReaderBase> dfrb(new avro::DataStreamReaderBase(in));
-    std::cout << dfrb.get() << std::endl;
     avro::DataStreamReader<avro::GenericDatum> dfr(dfrb);
-    std::cout << &dfr.base_ << std::endl;
-    //avro::DataFileReader<avro::GenericDatum> dfr("test.bin");
     // we can derive the schema from the data file like so.
-    if(schema == NULL){
+    if(! schema.root()){
       std::cout << "no schema yet." << std::endl;
-      schema = &(dfr.dataSchema());
-
+      schema = dfr.dataSchema();
+      OnSchema();
+    }else{
+      return scope.Close(Undefined());
     }
 
     avro::GenericDatum datum(dfr.dataSchema());
-    int i = 0;
     while(dfr.read(datum)){
-      datumArray->Set(i, DecodeAvro(datum));
-      //size_t outputLen = dfrb->stream_->byteCount();
-      //std::cout << outputLen << std::endl;
-      i++;
+      OnDatum(DecodeAvro(datum));
     }
   }
   catch (std::exception &e) {
-      std::cerr<< "error" << e.what() << std::endl;
+    OnError(e.what());
   }
 
-  return scope.Close(datumArray);
-}
-*/
-
-void EncodeFile(const char* filename, Local<Function> cb, Local<Object> data){
-
+  return scope.Close(Undefined());
 }
 
 /**
@@ -230,7 +217,7 @@ Handle<Value> DecodeFile(const Arguments& args) {
 }
 
 
-Handle<Value> Encode(const Arguments& args){
+Handle<Value> EncodeFile(const Arguments& args){
   HandleScope scope;
 
   std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
@@ -350,13 +337,6 @@ Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
   return obj;
 }
 
-Handle<Value> DecodeBytes(const Arguments& args){
-  HandleScope scope;
-
-
-  return scope.Close(Undefined());
-}
-
 /**
  * 
  */
@@ -370,7 +350,7 @@ void init(Handle<Object> target) {
 
   NODE_SET_METHOD(target, "decode", DecodeFile);
   
-  NODE_SET_METHOD(target, "encode", Encode);
+  NODE_SET_METHOD(target, "encode", EncodeFile);
   
   NODE_SET_METHOD(target, "setSchema", SetSchema);
 

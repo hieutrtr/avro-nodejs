@@ -11,7 +11,7 @@
         'ldflags': ['-L/home/benjamin/Workspace/AvroNode/avrocpp/lib'],
         'libraries': ['/home/benjamin/Workspace/AvroNode/avrocpp/lib/libavrocpp.so']
       },
-      "sources": [ "avro.cc" ]
+      "sources": [ "binding.cc", "avro-node.cpp", "avro-node.h" ]
     }
   ]
 }

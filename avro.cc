@@ -14,10 +14,11 @@
 #include <avro/Encoder.hh>
 #include <avro/Decoder.hh>
 
-#include "avro/Specific.hh"
-#include "avro/Generic.hh"
-#include "avro/Node.hh"
-#include "avro/DataFile.hh"
+#include <avro/Specific.hh>
+#include <avro/Node.hh>
+#include <avro/DataFile.hh>
+#include <avro/Generic.hh>
+
 #include <avro/Stream.hh>
 #include <avro/DataStream.hh>
 
@@ -44,11 +45,11 @@ void OnError(const char *error);
 
 std::auto_ptr<avro::OutputStream> output = avro::memoryOutputStream();
 avro::StreamWriter writer = avro::StreamWriter(*output);
-avro::ValidSchema schema;
+avro::ValidSchema schema = avro::ValidSchema();
 
 
-Handle<Value> DecodeBytes(const Arguments& args){
-  HandleScope scope;
+
+void byteReader(){
 
   std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*output);
   avro::DecoderPtr d = avro::binaryDecoder();
@@ -73,6 +74,30 @@ Handle<Value> DecodeBytes(const Arguments& args){
   }
   catch (std::exception &e) {
     OnError(e.what());
+  }
+
+}
+
+Handle<Value> DecodeBytes(const Arguments& args){
+  HandleScope scope;
+
+  if (args.Length() > 1) {
+    OnError("Wrong number of arguments");
+    return scope.Close(Undefined());
+  }
+
+  if(args[0]->IsObject()){
+    Local<Object> obj = args[0]->ToObject();
+    //get length of array
+    int len = obj->GetIndexedPropertiesExternalArrayDataLength();
+    uint8_t *buffer = (uint8_t*) obj->GetIndexedPropertiesExternalArrayData();  
+    int index = 0;
+    uint8_t byte;
+    while(byte = buffer[index++]){
+      std::cout << byte << std::endl;
+    }
+  }else {
+    OnError("Argument must be a Byte Array");
   }
 
   return scope.Close(Undefined());
@@ -180,7 +205,12 @@ Handle<Value> GetSchema(const Arguments& args){
   HandleScope scope;
   std::ostringstream oss(std::ios_base::out);
   schema.toJson(oss);
-  return scope.Close(String::New(oss.str().c_str()));
+  if(! schema.root()){
+    std::cout << "root not defined" << std::endl;
+    return scope.Close(Undefined());
+  }else{
+    return scope.Close(String::New(oss.str().c_str()));
+  }
 }
 
 Handle<Value> DecodeFile(const Arguments& args) {
@@ -190,8 +220,6 @@ Handle<Value> DecodeFile(const Arguments& args) {
     ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
   }
-
-  Local<Function> cb = Local<Function>::Cast(args[1]);
 
   if(args[0]->IsString()){
     // get the param
@@ -258,7 +286,7 @@ Handle<Value> EncodeFile(const Arguments& args){
  * converts a GenericDatum into a v8 object that can be passed back to javascript
  */
 Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
-    Handle<Object> obj = Object::New();
+  Handle<Object> obj = Object::New();
 
   //return this Object
   if(datum.type() == avro::AVRO_RECORD){
@@ -319,7 +347,6 @@ Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
         itDatum.first.c_str(),
         itDatum.first.size()
         ),DecodeAvro(itDatum.second));
-
       i++;
     }
     return datumArray;
@@ -337,37 +364,6 @@ Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
   return obj;
 }
 
-/**
- * 
- */
-Handle<Value> EncodeBytes(const Arguments& args){
-  HandleScope scope;
 
-  return scope.Close(Undefined());
-}
-
-void init(Handle<Object> target) {
-
-  NODE_SET_METHOD(target, "decode", DecodeFile);
-  
-  NODE_SET_METHOD(target, "encode", EncodeFile);
-  
-  NODE_SET_METHOD(target, "setSchema", SetSchema);
-
-  NODE_SET_METHOD(target, "getSchema", GetSchema);
-
-  NODE_SET_METHOD(target, "decodeBytes", DecodeBytes);
-
-  NODE_SET_METHOD(target, "encodeBytes", EncodeBytes);
-
-  on_schema = NODE_PSYMBOL("onschema");
-
-  on_datum = NODE_PSYMBOL("ondatum");
-
-  on_error = NODE_PSYMBOL("onerror");
-
-  module_handle = Persistent<Object>::New(target);
-
-}
 
 NODE_MODULE(avro, init)

@@ -1,27 +1,35 @@
 var fs = require('fs');
-var avro = require('./build/Release/avro');
+var addon = require('./build/Release/avro');
 var Buffer = require('buffer').Buffer;
 
-//simple file read case
-avro.onerror = function(error){
-  console.log(error);
+
+var avro1 = new addon.Avro();
+
+var avro2 = new addon.Avro();
+
+avro1.onschema = function(schema){
+  console.log("schema 1");
 }
 
-avro.onschema = function(schema){
-  console.log(schema);
+avro2.onschema = function(schema){
+  console.log("schema 2");
 }
 
-avro.ondatum = function(datum){
-  console.log(datum);
+avro1.onerror = function(error){
+  console.log("error");
 }
 
-//avro.setSchema("cpx.json");
+avro1.ondatum = function(datum){
+  console.log("datum");
+}
 
-avro.decode("test.bin");
+//avro1.setSchema("cpx.json");
 
-//console.log(avro.getSchema());
+//avro1.decode("test.bin");
+//console.log(avro1);
+//console.log(avro1.getSchema());
 
-/*
+
 fs.open("test.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){
     var i=0
@@ -31,8 +39,7 @@ fs.open("test.bin", 'r', function(status, fd) {
     console.log('.'+"test.bin"+' '+s);
     for(i=0;i<s;){
       var readbytes = fs.readSync(fd,buffer,0,buffer.length,i);
-      avro.decodeAppend(buffer.slice(0,readbytes));
-      console.log(avro.decode().length);
+      avro1.decodeBytes(buffer.slice(0,readbytes));
       i=i+buffer.length;
     }
     //console.log(addon.decode().length);
@@ -41,4 +48,4 @@ fs.open("test.bin", 'r', function(status, fd) {
   })
 });
 console.log("Calling Addon end");
-*/
+

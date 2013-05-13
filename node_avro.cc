@@ -29,7 +29,7 @@ namespace node {
     //Buffer *buffer_;
     ValidSchema schema_;
     buffer_type buffer_;
-    
+
 
     static Handle<Value> New(const Arguments& args){
       HandleScope scope;
@@ -89,8 +89,6 @@ namespace node {
 
       if(args[0]->IsObject()){
 
-        avro->write_in_progress_ = true;
-
         Local<Object> in_buf = args[0]->ToObject();
 
         int len = Buffer::Length(in_buf);
@@ -99,45 +97,11 @@ namespace node {
 
         avro->buffer_.insert(avro->buffer_.end(), in, in + len);
 
-        /*
-        AvroBaton *baton = new AvroBaton();
-        baton->request = new uv_work_t;
-        baton->ctx = avro;
-        */
-       
-        uv_work_t *work_req = new uv_work_t;
-        work_req->data = avro;
-
-        uv_queue_work(uv_default_loop(),
-                      work_req,
-                      Avro::Process,
-                      Avro::After);
-
       }else{
         OnError(avro, "Argument must be a Byte Array");
       }
 
       return avro->handle_;
-    }
-
-    static void Process(uv_work_t* work_req){
-
-      Avro* ctx = (Avro *)work_req->data;
-      //if(!ctx->write_in_progress_){
-        std::cout << ctx->buffer_.size() << std::endl;
-      //}
-      //do work here
-    }
-
-    //v8 land!
-    static void After(uv_work_t* work_req, int status){
-      HandleScope scope;
-
-      Avro* ctx = (Avro *)work_req->data;
-
-      ctx->write_in_progress_ = false;
-
-      //ctx->Unref(); 
     }
 
     /**

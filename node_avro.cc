@@ -5,20 +5,35 @@
 #include <avro/Generic.hh>
 #include <avro/DataFile.hh>
 #include <avro/Compiler.hh>
+#include <avro/Decoder.hh>
+#include <avro/Encoder.hh>
+#include <avro/Specific.hh>
+#include <time.h>
 #include <stdlib.h>
+#include <iostream>
+#include <fstream>
+#include "cpx.hh"
 
 //#include "buffer.h"
-typedef std::vector<char> buffer_type;
 
+typedef std::vector<unsigned char> buffer_type;
 
 namespace node {
   using namespace v8;
   using namespace node;
   using namespace avro;
 
+  const std::string AVRO_SCHEMA_KEY("avro.schema");
+  const std::string AVRO_CODEC_KEY("avro.codec");
+  const std::string AVRO_NULL_CODEC("null");
+
   Persistent<String> on_schema;
   Persistent<String> on_datum;
   Persistent<String> on_error;
+
+  uv_async_t async;
+  uv_cond_t cond;
+  uv_mutex_t mutex;
 
   void InitAvro(Handle<Object> target);
 
@@ -29,16 +44,31 @@ namespace node {
     //Buffer *buffer_;
     ValidSchema schema_;
     buffer_type buffer_;
-
+    bool write_in_progress_;
+    bool empty_;
+    DecoderPtr decoder_;
 
     static Handle<Value> New(const Arguments& args){
       HandleScope scope;
 
       Avro *ctx = new Avro();
       //ctx->buffer_ = new Buffer();
+      ctx->write_in_progress_ = false;
+      ctx->decoder_= binaryDecoder();
       ctx->Wrap(args.This());
 
+      uv_cond_init(&cond);
+      uv_mutex_init(&mutex);
+
       return args.This();
+    }
+
+    static void print_progress(uv_async_t *handle, int status /*UNUSED*/) {
+
+      Avro* ctx = (Avro *)handle->data;
+
+      printf("This is the length %d", ctx->buffer_.size());
+      OnError(ctx, "stuff");
     }
 
     static Handle<Value> DecodeFile(const Arguments &args) {  
@@ -88,20 +118,148 @@ namespace node {
       }
 
       if(args[0]->IsObject()){
+        uv_mutex_lock(&mutex);
 
         Local<Object> in_buf = args[0]->ToObject();
 
         int len = Buffer::Length(in_buf);
 
-        unsigned char *in = reinterpret_cast<unsigned char *>(Buffer::Data(in_buf));
+        const unsigned char *in = reinterpret_cast<const unsigned char *>(Buffer::Data(in_buf));
 
         avro->buffer_.insert(avro->buffer_.end(), in, in + len);
+        uv_mutex_unlock(&mutex);
+        if(!avro->write_in_progress_){
+          uv_async_init(uv_default_loop(), &async, print_progress);
+          uv_work_t *work_req = new uv_work_t;
+          work_req->data = avro;
+
+          uv_queue_work(uv_default_loop(),
+                        work_req,
+                        Avro::Process,
+                        Avro::After);  
+          avro->write_in_progress_ = true; 
+          avro->empty_ = true;      
+        }
+
+        std::cout << in << std::endl;
+        uv_cond_signal(&cond);
 
       }else{
         OnError(avro, "Argument must be a Byte Array");
       }
-
       return avro->handle_;
+    }
+
+
+    static Handle<Value> EncodeFile(const Arguments &args) { 
+      HandleScope scope; 
+
+      if(args[0]->IsString()){
+        // get the param
+        v8::String::Utf8Value filename(args[0]->ToString());
+
+        std::ifstream ifs("cpx.json");
+
+        avro::ValidSchema cpxSchema;
+        avro::compileJsonSchema(ifs, cpxSchema);
+
+        std::auto_ptr<avro::OutputStream> out = memoryOutputStream();
+        avro::EncoderPtr e = binaryEncoder();
+        e->init(*out);
+
+        for(int i = 0;i<50;i++){
+          c::cpx c1;
+          c1.re.set_double(10*i);
+          c1.im = 105;
+          encode(*e,c1);
+        }
+
+        std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
+
+        StreamReader reader(*in);
+
+        std::ofstream myFile ("data.bin", std::ios::out | std::ios::binary);
+        while(reader.hasMore()){
+          myFile.put(reader.read());
+        }
+        myFile.flush();
+        myFile.close();
+      }
+      return scope.Close(Undefined());
+    }
+
+    static Handle<Value> SetSchema(const Arguments &args) { 
+      HandleScope scope; 
+      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+      if (args.Length() > 1) {
+        ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());
+      }
+
+      if(args[0]->IsString()){
+        // get the param
+        v8::String::Utf8Value filename(args[0]->ToString());
+
+        try{
+
+          std::ifstream in(*filename);
+          avro::compileJsonSchema(in, ctx->schema_);
+
+        }catch(std::exception &e){
+          OnError(ctx, e.what());
+        }
+      }else{
+        OnError(ctx, "Wrong Argument. Must be string for filename");
+      }
+      return scope.Close(Undefined());
+    }
+    static Handle<Value> GetSchema(const Arguments &args) { 
+      HandleScope scope; 
+      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+      std::ostringstream stream;
+
+      ctx->schema_.toJson(stream);
+
+      std::string str =  stream.str();
+      const char* chr = str.c_str();
+
+      return scope.Close(String::New(chr));
+    }
+
+
+    static void Process(uv_work_t* work_req){
+      for(;;){
+        uv_mutex_lock(&mutex);
+        Avro* ctx = (Avro *)work_req->data;
+        if(ctx->empty_){
+          uv_cond_wait(&cond, &mutex);
+        }
+
+        std::auto_ptr<avro::InputStream> input = memoryInputStream(static_cast<unsigned char*>(ctx->buffer_.data()), ctx->buffer_.size());
+        
+        const DecoderPtr decoder = binaryDecoder();
+        decoder->init(*input);
+
+        
+        sleep(6);
+        async.data = (void*) ctx;
+        uv_async_send(&async);
+        uv_mutex_unlock(&mutex);
+        ctx->empty_ = true;
+      }
+    }
+
+    //v8 land!
+    static void After(uv_work_t* work_req, int status){
+      HandleScope scope;
+
+      Avro* ctx = (Avro *)work_req->data;
+
+      ctx->write_in_progress_ = false;
+
+      //ctx->Unref(); 
     }
 
     /**
@@ -253,10 +411,10 @@ void InitAvro(Handle<Object> target){
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decode", Avro::DecodeFile);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeBytes", Avro::DecodeBytes);
-/*
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encode", Avro::EncodeFile);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "setSchema", Avro::SetSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
+      /*
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeBytes", Avro::EncodeBytes);
 */
   a_temp->SetClassName(String::NewSymbol("Avro"));

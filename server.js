@@ -23,29 +23,48 @@ avro1.ondatum = function(datum){
   console.log("datum");
 }
 
-//avro1.setSchema("cpx.json");
+avro1.setSchema("cpx.json");
 
 //avro1.decode("test.bin");
 //console.log(avro1);
-//console.log(avro1.getSchema());
+
+console.log(avro1.getSchema());
 
 
-fs.open("test.bin", 'r', function(status, fd) {
+//avro1.encode("hello");
+
+/*
+fs.open("data.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){
     var i=0
     var s=stats.size
     var buffer = new Buffer(100);
 
     console.log('.'+"test.bin"+' '+s);
-    for(i=0;i<s;){
-      var readbytes = fs.readSync(fd,buffer,0,buffer.length,i);
-      avro1.decodeBytes(buffer.slice(0,readbytes));
-      i=i+buffer.length;
-    }
-    //console.log(addon.decode().length);
+    buf(fs,fd,0,s,buffer);
 
-    fs.close(fd)
+    //console.log(addon.decode().length);
   })
 });
+
+
+var buf=function(fs,fd,i,s,buffer){
+  if(i+buffer.length<s){
+    fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
+      avro1.decodeBytes(b.slice(0,l));
+
+      i=i+buffer.length;
+      setTimeout(function(){
+        buf(fs,fd,i,s,buffer)}, 1000);
+    });
+  }else{
+    fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
+      avro1.decodeBytes(b.slice(0,l));
+      fs.close(fd);
+    });
+  }
+}
+
+*/
 console.log("Calling Addon end");
 

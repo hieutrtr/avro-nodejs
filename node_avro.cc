@@ -8,32 +8,23 @@
 #include <avro/Decoder.hh>
 #include <avro/Encoder.hh>
 #include <avro/Specific.hh>
-#include <time.h>
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
 #include "cpx.hh"
-
-//#include "buffer.h"
-
-typedef std::vector<unsigned char> buffer_type;
+#include "BufferedInputStream.hh"
 
 namespace node {
   using namespace v8;
   using namespace node;
   using namespace avro;
 
-  const std::string AVRO_SCHEMA_KEY("avro.schema");
-  const std::string AVRO_CODEC_KEY("avro.codec");
-  const std::string AVRO_NULL_CODEC("null");
-
   Persistent<String> on_schema;
   Persistent<String> on_datum;
   Persistent<String> on_error;
 
   uv_async_t async;
-  uv_cond_t cond;
-  uv_mutex_t mutex;
+  uv_mutex_t datumLock;
 
   void InitAvro(Handle<Object> target);
 
@@ -43,32 +34,38 @@ namespace node {
     ~Avro() {};
     //Buffer *buffer_;
     ValidSchema schema_;
-    buffer_type buffer_;
     bool write_in_progress_;
-    bool empty_;
+    std::vector<GenericDatum> datums_;
     DecoderPtr decoder_;
+    avronode::BufferedInputStream *buffer_;
 
     static Handle<Value> New(const Arguments& args){
       HandleScope scope;
 
       Avro *ctx = new Avro();
-      //ctx->buffer_ = new Buffer();
       ctx->write_in_progress_ = false;
       ctx->decoder_= binaryDecoder();
+
       ctx->Wrap(args.This());
 
-      uv_cond_init(&cond);
-      uv_mutex_init(&mutex);
+      uv_mutex_init(&datumLock);
 
       return args.This();
     }
 
     static void print_progress(uv_async_t *handle, int status /*UNUSED*/) {
-
+      // loop through datums then release lock.
+      // Thread safe block here 
+      // ---------------------------------------------------------------------
+      uv_mutex_lock(&datumLock);
       Avro* ctx = (Avro *)handle->data;
-
-      printf("This is the length %d", ctx->buffer_.size());
-      OnError(ctx, "stuff");
+      for(int i = 0;i < ctx->datums_.size();i++){
+        OnDatum(ctx, DecodeAvro(ctx->datums_[i]));
+      }
+      ctx->datums_.clear();
+      uv_mutex_unlock(&datumLock);
+      // Thread safe block ends here
+      // ---------------------------------------------------------------------
     }
 
     static Handle<Value> DecodeFile(const Arguments &args) {  
@@ -118,18 +115,26 @@ namespace node {
       }
 
       if(args[0]->IsObject()){
-        uv_mutex_lock(&mutex);
-
+        //convert argument to Object
         Local<Object> in_buf = args[0]->ToObject();
 
+        //get length of buffer
         int len = Buffer::Length(in_buf);
+        uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
 
-        const unsigned char *in = reinterpret_cast<const unsigned char *>(Buffer::Data(in_buf));
-
-        avro->buffer_.insert(avro->buffer_.end(), in, in + len);
-        uv_mutex_unlock(&mutex);
-        if(!avro->write_in_progress_){
+        //get data of the buffer
+        if(avro->write_in_progress_){
+          avro->buffer_->append(in,len);
+          printf("a print from DecodeBytes\n");
+        }else{
+          //fire off the process function once per data stream
+          // will run until write is closed. 
+          //init the call back for returning datums
+          std::vector<uint8_t> data;
+          data.insert(data.begin(), in, in+len);
+          avro->buffer_ = new avronode::BufferedInputStream(data, 0, data.size());
           uv_async_init(uv_default_loop(), &async, print_progress);
+          //create new work_t
           uv_work_t *work_req = new uv_work_t;
           work_req->data = avro;
 
@@ -138,12 +143,7 @@ namespace node {
                         Avro::Process,
                         Avro::After);  
           avro->write_in_progress_ = true; 
-          avro->empty_ = true;      
         }
-
-        std::cout << in << std::endl;
-        uv_cond_signal(&cond);
-
       }else{
         OnError(avro, "Argument must be a Byte Array");
       }
@@ -163,7 +163,7 @@ namespace node {
         avro::ValidSchema cpxSchema;
         avro::compileJsonSchema(ifs, cpxSchema);
 
-        std::auto_ptr<avro::OutputStream> out = memoryOutputStream();
+        std::auto_ptr<avro::OutputStream> out = memoryOutputStream(1);
         avro::EncoderPtr e = binaryEncoder();
         e->init(*out);
 
@@ -177,12 +177,13 @@ namespace node {
         std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
 
         StreamReader reader(*in);
-
         std::ofstream myFile ("data.bin", std::ios::out | std::ios::binary);
         while(reader.hasMore()){
           myFile.put(reader.read());
         }
-        myFile.flush();
+        //for some reason calling myFile.flush() was 
+        //causeing the un defined buffer of reader or in 
+        // to be written causing all sorts of problems. 
         myFile.close();
       }
       return scope.Close(Undefined());
@@ -228,26 +229,48 @@ namespace node {
       return scope.Close(String::New(chr));
     }
 
+    static Handle<Value> DecodeClose(const Arguments &args){
+      HandleScope scope; 
+      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+      printf("A print from DecodeClose\n");
+      ctx->buffer_->append(NULL,0);
+      if(ctx->write_in_progress_){
+        //ctx->write_in_progress_ = false;
+        //delete(ctx->buffer_);
+      }
+
+      return scope.Close(Undefined());
+    }
 
     static void Process(uv_work_t* work_req){
+      Avro* ctx = (Avro *)work_req->data;
+      ctx->decoder_->init(*(ctx->buffer_));
+      GenericReader reader(ctx->schema_, ctx->decoder_);
+
       for(;;){
-        uv_mutex_lock(&mutex);
-        Avro* ctx = (Avro *)work_req->data;
-        if(ctx->empty_){
-          uv_cond_wait(&cond, &mutex);
+        GenericDatum *datum = new GenericDatum(ctx->schema_);
+        //This is a blocking read
+        printf("before read lock \n");
+        reader.read(*datum);
+        printf("after datum lock\n");
+        // if we get the signal that we're done writing
+        if(datum == NULL){
+          printf("is null\n");
         }
+        // Thread safe area here
+        // ---------------------------------------------------------------
+        // mutex lock for writing to datum on avro object. 
+        uv_mutex_lock(&datumLock);
 
-        std::auto_ptr<avro::InputStream> input = memoryInputStream(static_cast<unsigned char*>(ctx->buffer_.data()), ctx->buffer_.size());
-        
-        const DecoderPtr decoder = binaryDecoder();
-        decoder->init(*input);
+        ctx->datums_.push_back(*datum);
 
-        
-        sleep(6);
+        uv_mutex_unlock(&datumLock);
+        //Thread safe area leave
+        // ---------------------------------------------------------------
+
+        //Send data to returning javascript callback
         async.data = (void*) ctx;
         uv_async_send(&async);
-        uv_mutex_unlock(&mutex);
-        ctx->empty_ = true;
       }
     }
 
@@ -392,9 +415,6 @@ namespace node {
       MakeCallback(ctx->handle_, on_datum, 1, args);
     }
 
-  private:
-    uv_work_t work_req_;
-
   };
 
 
@@ -411,9 +431,11 @@ void InitAvro(Handle<Object> target){
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decode", Avro::DecodeFile);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeBytes", Avro::DecodeBytes);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeClose", Avro::DecodeClose);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encode", Avro::EncodeFile);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "setSchema", Avro::SetSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
+
       /*
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeBytes", Avro::EncodeBytes);
 */

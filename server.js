@@ -20,20 +20,16 @@ avro1.onerror = function(error){
 }
 
 avro1.ondatum = function(datum){
-  console.log("datum");
+  console.log("onDatum",datum);
 }
 
 avro1.setSchema("cpx.json");
 
-//avro1.decode("test.bin");
-//console.log(avro1);
-
-console.log(avro1.getSchema());
-
+//console.log(avro1.getSchema());
 
 //avro1.encode("hello");
 
-/*
+
 fs.open("data.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){
     var i=0
@@ -55,16 +51,19 @@ var buf=function(fs,fd,i,s,buffer){
 
       i=i+buffer.length;
       setTimeout(function(){
-        buf(fs,fd,i,s,buffer)}, 1000);
+        buf(fs,fd,i,s,buffer)}, 1);
     });
   }else{
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
       avro1.decodeBytes(b.slice(0,l));
+      setTimeout(function(){
+        avro1.decodeClose();
+
+      },20)
       fs.close(fd);
     });
   }
 }
 
-*/
 console.log("Calling Addon end");
 

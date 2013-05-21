@@ -5,14 +5,8 @@ var Buffer = require('buffer').Buffer;
 
 var avro1 = new addon.Avro();
 
-var avro2 = new addon.Avro();
-
 avro1.onschema = function(schema){
   console.log("schema 1");
-}
-
-avro2.onschema = function(schema){
-  console.log("schema 2");
 }
 
 avro1.onerror = function(error){
@@ -23,7 +17,9 @@ avro1.ondatum = function(datum){
   console.log("onDatum",datum);
 }
 
-avro1.setSchema("cpx.json");
+var jsonSchema = '{ "type": "record", "name": "cpx", "fields" : [{"name": "re", "type": ["double", "null"]},{"name": "im", "type" : "double", "default" : "2.0"},{"name": "name", "type": "string", "default" : "hello"},{"name": "array", "type": [{ "type": "array", "items": "string" }, "null"], "default": "null"},{"name": "map", "type": [{ "type": "map", "values": "int"}]}]}'
+
+avro1.queueSchema(jsonSchema);
 
 //console.log(avro1.getSchema());
 
@@ -47,7 +43,7 @@ fs.open("data.bin", 'r', function(status, fd) {
 var buf=function(fs,fd,i,s,buffer){
   if(i+buffer.length<s){
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
-      avro1.decodeBytes(b.slice(0,l));
+      avro1.push(b.slice(0,l));
 
       i=i+buffer.length;
       setTimeout(function(){
@@ -55,15 +51,10 @@ var buf=function(fs,fd,i,s,buffer){
     });
   }else{
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
-      avro1.decodeBytes(b.slice(0,l));
-      setTimeout(function(){
-        avro1.decodeClose();
-
-      },20)
+      avro1.push(b.slice(0,l));
       fs.close(fd);
     });
   }
 }
 
-console.log("Calling Addon end");
 

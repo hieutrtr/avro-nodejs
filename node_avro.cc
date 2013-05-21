@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
+#include <queue>
 #include "cpx.hh"
 #include "BufferedInputStream.hh"
 
@@ -33,10 +34,13 @@ namespace node {
     Avro() : ObjectWrap(){};
     ~Avro() {};
     //Buffer *buffer_;
+    std::queue<ValidSchema> schemaQueue_;
     ValidSchema schema_;
     bool write_in_progress_;
     std::vector<GenericDatum> datums_;
     DecoderPtr decoder_;
+    uv_sem_t sem_;
+    uv_mutex_t datumLock_;
     avronode::BufferedInputStream *buffer_;
 
     static Handle<Value> New(const Arguments& args){
@@ -45,28 +49,110 @@ namespace node {
       Avro *ctx = new Avro();
       ctx->write_in_progress_ = false;
       ctx->decoder_= binaryDecoder();
+      std::vector<uint8_t> data;
+      ctx->buffer_ = new avronode::BufferedInputStream(data, 0, 0);
 
       ctx->Wrap(args.This());
+      uv_sem_init(&ctx->sem_, 0);
+      uv_mutex_init(&ctx->datumLock_);
 
-      uv_mutex_init(&datumLock);
+      uv_async_init(uv_default_loop(), &async, print_progress);
+      //create new work_t
+      uv_work_t *work_req = new uv_work_t;
+      work_req->data = ctx;
+
+      uv_queue_work(uv_default_loop(),
+                    work_req,
+                    Avro::Process,
+                    Avro::After);  
 
       return args.This();
     }
 
     static void print_progress(uv_async_t *handle, int status /*UNUSED*/) {
+      Avro* ctx = (Avro *)handle->data;
       // loop through datums then release lock.
       // Thread safe block here 
       // ---------------------------------------------------------------------
-      uv_mutex_lock(&datumLock);
-      Avro* ctx = (Avro *)handle->data;
+      uv_mutex_lock(&ctx->datumLock_);
       for(int i = 0;i < ctx->datums_.size();i++){
         OnDatum(ctx, DecodeAvro(ctx->datums_[i]));
       }
       ctx->datums_.clear();
-      uv_mutex_unlock(&datumLock);
+      uv_mutex_unlock(&ctx->datumLock_);
       // Thread safe block ends here
       // ---------------------------------------------------------------------
     }
+
+    /**
+     * Add a schema onto the schema queue. This is then processes 
+     * in the loop
+     */
+    static Handle<Value> QueueSchema(const Arguments &args){
+      HandleScope scope;
+      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+      //grab string from input.
+      v8::String::Utf8Value schemaString(args[0]->ToString());
+      std::istringstream is(*schemaString);
+      //create schema
+      ValidSchema schema;
+      compileJsonSchema(is, schema);
+
+      // ------------------------------------------------
+      // lock section here adding to queue
+      uv_mutex_lock(&ctx->datumLock_);
+
+      //push new schema to queue
+      ctx->schemaQueue_.push(schema);
+      uv_sem_post(&ctx->sem_);
+
+      uv_mutex_unlock(&ctx->datumLock_);
+      // ------------------------------------------------
+      // release lock 
+      // 
+      printf("got and set a schema\n");
+
+      return scope.Close(Undefined());
+    }
+
+    /**
+     * Push bytes to BufferedInputStream
+     */
+    static Handle<Value> Push(const Arguments &args){
+      HandleScope scope;
+      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+      if (args.Length() > 1) {
+        OnError(ctx, "Wrong number of arguments");
+        return scope.Close(Undefined());
+      }
+
+      if(args[0]->IsObject()){
+        //convert argument to Object
+        Local<Object> in_buf = args[0]->ToObject();
+
+        //get length of buffer
+        int len = Buffer::Length(in_buf);
+        uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
+
+        //get data of the buffer
+        // ------------------------------------------------
+        // lock section here adding to BufferedInputStream.
+        uv_mutex_lock(&ctx->datumLock_);
+
+        ctx->buffer_->append(in,len);
+
+        uv_mutex_unlock(&ctx->datumLock_);      
+        // ------------------------------------------------
+        // release lock section here. 
+
+      }else{
+        OnError(ctx, "Argument must be a Byte Array");
+      }
+
+      return scope.Close(Undefined());
+    }
+
 
     static Handle<Value> DecodeFile(const Arguments &args) {  
       HandleScope scope;
@@ -102,55 +188,6 @@ namespace node {
       return scope.Close(Undefined());
     }
 
-    /**
-     * 
-     */
-    static Handle<Value> DecodeBytes(const Arguments &args) {  
-      HandleScope scope;
-      Avro * avro = ObjectWrap::Unwrap<Avro>(args.This());
-
-      if (args.Length() > 1) {
-        OnError(avro, "Wrong number of arguments");
-        return scope.Close(Undefined());
-      }
-
-      if(args[0]->IsObject()){
-        //convert argument to Object
-        Local<Object> in_buf = args[0]->ToObject();
-
-        //get length of buffer
-        int len = Buffer::Length(in_buf);
-        uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
-
-        //get data of the buffer
-        if(avro->write_in_progress_){
-          avro->buffer_->append(in,len);
-          printf("a print from DecodeBytes\n");
-        }else{
-          //fire off the process function once per data stream
-          // will run until write is closed. 
-          //init the call back for returning datums
-          std::vector<uint8_t> data;
-          data.insert(data.begin(), in, in+len);
-          avro->buffer_ = new avronode::BufferedInputStream(data, 0, data.size());
-          uv_async_init(uv_default_loop(), &async, print_progress);
-          //create new work_t
-          uv_work_t *work_req = new uv_work_t;
-          work_req->data = avro;
-
-          uv_queue_work(uv_default_loop(),
-                        work_req,
-                        Avro::Process,
-                        Avro::After);  
-          avro->write_in_progress_ = true; 
-        }
-      }else{
-        OnError(avro, "Argument must be a Byte Array");
-      }
-      return avro->handle_;
-    }
-
-
     static Handle<Value> EncodeFile(const Arguments &args) { 
       HandleScope scope; 
 
@@ -167,7 +204,7 @@ namespace node {
         avro::EncoderPtr e = binaryEncoder();
         e->init(*out);
 
-        for(int i = 0;i<50;i++){
+        for(int i = 0;i<1;i++){
           c::cpx c1;
           c1.re.set_double(10*i);
           c1.im = 105;
@@ -215,6 +252,7 @@ namespace node {
       }
       return scope.Close(Undefined());
     }
+    
     static Handle<Value> GetSchema(const Arguments &args) { 
       HandleScope scope; 
       Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
@@ -232,12 +270,7 @@ namespace node {
     static Handle<Value> DecodeClose(const Arguments &args){
       HandleScope scope; 
       Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
-      printf("A print from DecodeClose\n");
-      ctx->buffer_->append(NULL,0);
-      if(ctx->write_in_progress_){
-        //ctx->write_in_progress_ = false;
-        //delete(ctx->buffer_);
-      }
+      //TBD functionality for closing. 
 
       return scope.Close(Undefined());
     }
@@ -245,26 +278,29 @@ namespace node {
     static void Process(uv_work_t* work_req){
       Avro* ctx = (Avro *)work_req->data;
       ctx->decoder_->init(*(ctx->buffer_));
-      GenericReader reader(ctx->schema_, ctx->decoder_);
 
-      for(;;){
-        GenericDatum *datum = new GenericDatum(ctx->schema_);
+      while(true){
+        uv_sem_wait(&ctx->sem_);
+        //create reader and generic datum.
+        GenericReader reader(ctx->schemaQueue_.front(), ctx->decoder_);
+        GenericDatum *datum = new GenericDatum(ctx->schemaQueue_.front());
+        //disgard the top schema
+        printf("got a schema for the datum\n");
+
+        //should probably lock this area for thread safe
+        ctx->schemaQueue_.pop();
         //This is a blocking read
-        printf("before read lock \n");
         reader.read(*datum);
-        printf("after datum lock\n");
-        // if we get the signal that we're done writing
-        if(datum == NULL){
-          printf("is null\n");
-        }
+
+        printf("got datum\n");
         // Thread safe area here
         // ---------------------------------------------------------------
         // mutex lock for writing to datum on avro object. 
-        uv_mutex_lock(&datumLock);
+        uv_mutex_lock(&ctx->datumLock_);
 
         ctx->datums_.push_back(*datum);
 
-        uv_mutex_unlock(&datumLock);
+        uv_mutex_unlock(&ctx->datumLock_);
         //Thread safe area leave
         // ---------------------------------------------------------------
 
@@ -435,8 +471,9 @@ void InitAvro(Handle<Object> target){
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encode", Avro::EncodeFile);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "setSchema", Avro::SetSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
-
-      /*
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
+/*
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeBytes", Avro::EncodeBytes);
 */
   a_temp->SetClassName(String::NewSymbol("Avro"));

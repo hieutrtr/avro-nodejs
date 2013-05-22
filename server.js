@@ -69,7 +69,49 @@ client.on('connectFailed', function(error) {
 
 client.on('connect', function(connection) {
   console.log('WebSocket client connected');
-  avro.queueSchema('{"type": "map", "values": "bytes"}');
+  avro.queueSchema('{"type": "map", "values": "bytes"}',
+    function(datum){
+      var sequenceNum = avro.parseDatum('"long"', new Buffer(datum.sequence));
+      console.log(datum, sequenceNum);
+      avro.queueSchema('"boolean"', function(errorFlag){
+        if(!errorFlag){
+          var buildingSchema = "\
+                              {\
+                                \"name\": \"com.gensler.models.organizations.Organization\",\
+                                \"type\": \"record\",\
+                                \"fields\": [\
+                                  { \"name\": \"id\", \"type\": \
+                                    {\
+                                      \"name\": \"com.gensler.models.common.GUID\",\
+                                      \"type\": \"record\",\
+                                      \"fields\": [\
+                                        { \"name\": \"bytes\", \"type\": \"bytes\"}\
+                                      ]\
+                                    }\
+                                  },\
+                                  { \"name\": \"name\", \"type\": \"string\" },\
+                                  { \"name\": \"organizationType\", \"type\": \"string\" }\
+                                ]\
+                              }";
+
+          avro.queueSchema(buildingSchema,
+          function(datum){
+            console.log(datum);
+          },
+          function(error){
+
+          });
+        }else{
+          console.log(errorFlag);
+        }
+      },
+      function(error){
+
+      });
+    },
+    function(errer){
+      console.log(error);
+    });
   connection.on('error', function(error) {
     console.log("Connection Error: " + error.toString());
   });

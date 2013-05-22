@@ -15,7 +15,13 @@
 #include "cpx.hh"
 #include "BufferedInputStream.hh"
 
-#define uint_t unsigned
+struct datumBaton {
+  avro::ValidSchema schema;
+  avro::GenericDatum datum;
+  std::string errorMessage;
+  v8::Persistent<v8::Function> onSuccess;
+  v8::Persistent<v8::Function> onError;
+};
 
 namespace node {
   using namespace v8;
@@ -36,13 +42,14 @@ namespace node {
     Avro() : ObjectWrap(){};
     ~Avro() {};
     //Buffer *buffer_;
-    std::queue<ValidSchema> schemaQueue_;
+    std::queue<datumBaton> processQueue_;
     ValidSchema schema_;
     bool write_in_progress_;
-    std::vector<GenericDatum> datums_;
+    std::vector<datumBaton> datums_;
     DecoderPtr decoder_;
     uv_sem_t sem_;
     uv_mutex_t datumLock_;
+    uv_mutex_t queueLock_;
     avronode::BufferedInputStream *buffer_;
 
     static Handle<Value> New(const Arguments& args){
@@ -57,6 +64,7 @@ namespace node {
       ctx->Wrap(args.This());
       uv_sem_init(&ctx->sem_, 0);
       uv_mutex_init(&ctx->datumLock_);
+      uv_mutex_init(&ctx->queueLock_);
 
       uv_async_init(uv_default_loop(), &async, print_progress);
       //create new work_t
@@ -78,7 +86,13 @@ namespace node {
       // ---------------------------------------------------------------------
       uv_mutex_lock(&ctx->datumLock_);
       for(int i = 0;i < ctx->datums_.size();i++){
-        OnDatum(ctx, DecodeAvro(ctx->datums_[i]));
+        datumBaton baton = ctx->datums_[i];
+        const unsigned argc = 1;
+        Local<Value> args[argc] = { Local<Value>::New(DecodeAvro(baton.datum)) };
+
+        MakeCallback(ctx->handle_, baton.onSuccess, 1, args);
+        baton.onSuccess.Dispose();
+        baton.onError.Dispose();
       }
       ctx->datums_.clear();
       uv_mutex_unlock(&ctx->datumLock_);
@@ -93,26 +107,45 @@ namespace node {
     static Handle<Value> QueueSchema(const Arguments &args){
       HandleScope scope;
       Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+      datumBaton baton;
+
+      if(!args[0]->IsString()){
+        OnError(ctx, "schema must be a string");
+        return scope.Close(Undefined());
+      }
       //grab string from input.
       v8::String::Utf8Value schemaString(args[0]->ToString());
       std::istringstream is(*schemaString);
       //create schema
+      //
       ValidSchema schema;
       compileJsonSchema(is, schema);
+      baton.schema = schema;
+      // set onsuccess callback for the proccess struct (TODO)
+      if(args.Length() > 2 &&args[1]->IsFunction()){
+        baton.onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+      }else{
 
+      }
+
+      // set onerror callback for the proccess struct (TODO)
+      if(args.Length() > 3 &&args[2]->IsFunction()){
+        baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
+      }else{
+
+      }
       // ------------------------------------------------
       // lock section here adding to queue
-      uv_mutex_lock(&ctx->datumLock_);
+      uv_mutex_lock(&ctx->queueLock_);
 
       //push new schema to queue
-      ctx->schemaQueue_.push(schema);
+      ctx->processQueue_.push(baton);
       uv_sem_post(&ctx->sem_);
-
-      uv_mutex_unlock(&ctx->datumLock_);
+      uv_mutex_unlock(&ctx->queueLock_);
       // ------------------------------------------------
       // release lock 
       // 
-      printf("got and set a schema\n");
 
       return scope.Close(Undefined());
     }
@@ -268,26 +301,29 @@ namespace node {
       while(true){
         uv_sem_wait(&ctx->sem_);
         //create reader and generic datum.
-        GenericReader reader(ctx->schemaQueue_.front(), ctx->decoder_);
-        GenericDatum *datum = new GenericDatum(ctx->schemaQueue_.front());
+        //
+        datumBaton baton = ctx->processQueue_.front();
+        GenericReader reader(baton.schema, ctx->decoder_);
+        //printf("---- set onSuccess %d------\n", ctx->processQueue_.front().onSuccess->IsFunction());
+        GenericDatum *datum = new GenericDatum(baton.schema);
         //disgard the top schema
         
         //should probably lock this area for thread safe
-        ctx->schemaQueue_.pop();
+        uv_mutex_lock(&ctx->queueLock_);
+        ctx->processQueue_.pop();
+        uv_mutex_unlock(&ctx->queueLock_);
         //This is a blocking read
         reader.read(*datum);
-
+        baton.datum = *datum;
         // Thread safe area here
         // ---------------------------------------------------------------
         // mutex lock for writing to datum on avro object. 
         uv_mutex_lock(&ctx->datumLock_);
-
-        ctx->datums_.push_back(*datum);
+        ctx->datums_.push_back(baton);
 
         uv_mutex_unlock(&ctx->datumLock_);
         //Thread safe area leave
         // ---------------------------------------------------------------
-
         //Send data to returning javascript callback
         async.data = (void*) ctx;
         uv_async_send(&async);

@@ -190,7 +190,7 @@ namespace node {
       return scope.Close(Undefined());
     }
 
-    static Handle<Value> ParseSchema(const Arguments &args){
+    static Handle<Value> ParseDatum(const Arguments &args){
       HandleScope scope;
       if(args.Length() > 2){
         ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
@@ -468,7 +468,7 @@ void InitAvro(Handle<Object> target){
  // NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "parseSchema", Avro::ParseSchema);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "parseDatum", Avro::ParseDatum);
 
 /*
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeBytes", Avro::EncodeBytes);

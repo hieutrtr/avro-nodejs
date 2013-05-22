@@ -21,7 +21,7 @@ avro.ondatum = function(datum){
   console.log("onDatum",datum);
   if(typeof datum.sequence !== "undefined"){
     var buf = new Buffer(datum.sequence);
-    var sequenceNum = avro.parseSchema('\"long\"', buf);
+    var sequenceNum = avro.parseDatum('\"long\"', buf);
     console.log("our sequence", sequenceNum);
   }
 };

@@ -15,6 +15,8 @@
 #include "cpx.hh"
 #include "BufferedInputStream.hh"
 
+#define uint_t unsigned
+
 namespace node {
   using namespace v8;
   using namespace node;
@@ -188,6 +190,39 @@ namespace node {
       return scope.Close(Undefined());
     }
 
+    static Handle<Value> ParseSchema(const Arguments &args){
+      HandleScope scope;
+      if(args.Length() > 2){
+        ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
+        return scope.Close(Undefined());        
+      }
+
+      if(args[0]->IsString()&&args[1]->IsObject()){
+        //create schema from string
+        v8::String::Utf8Value schemaString(args[0]->ToString());
+        std::istringstream is(*schemaString);
+
+        ValidSchema schema;
+        compileJsonSchema(is, schema);
+
+        DecoderPtr decoder = binaryDecoder();
+        Local<Object> in_buf = args[1]->ToObject();
+        int len = Buffer::Length(in_buf);
+        uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
+
+        std::auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,len);
+        decoder->init(*inputStream);
+
+        //create reader and generic datum.
+        GenericReader reader(schema, decoder);
+        GenericDatum *datum = new GenericDatum(schema);
+        reader.read(*datum);
+        return scope.Close(DecodeAvro(*datum));
+      }
+
+      return scope.Close(Undefined());
+    }
+
     static Handle<Value> EncodeFile(const Arguments &args) { 
       HandleScope scope; 
 
@@ -226,55 +261,6 @@ namespace node {
       return scope.Close(Undefined());
     }
 
-    static Handle<Value> SetSchema(const Arguments &args) { 
-      HandleScope scope; 
-      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
-
-      if (args.Length() > 1) {
-        ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
-        return scope.Close(Undefined());
-      }
-
-      if(args[0]->IsString()){
-        // get the param
-        v8::String::Utf8Value filename(args[0]->ToString());
-
-        try{
-
-          std::ifstream in(*filename);
-          avro::compileJsonSchema(in, ctx->schema_);
-
-        }catch(std::exception &e){
-          OnError(ctx, e.what());
-        }
-      }else{
-        OnError(ctx, "Wrong Argument. Must be string for filename");
-      }
-      return scope.Close(Undefined());
-    }
-    
-    static Handle<Value> GetSchema(const Arguments &args) { 
-      HandleScope scope; 
-      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
-
-      std::ostringstream stream;
-
-      ctx->schema_.toJson(stream);
-
-      std::string str =  stream.str();
-      const char* chr = str.c_str();
-
-      return scope.Close(String::New(chr));
-    }
-
-    static Handle<Value> DecodeClose(const Arguments &args){
-      HandleScope scope; 
-      Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
-      //TBD functionality for closing. 
-
-      return scope.Close(Undefined());
-    }
-
     static void Process(uv_work_t* work_req){
       Avro* ctx = (Avro *)work_req->data;
       ctx->decoder_->init(*(ctx->buffer_));
@@ -285,14 +271,12 @@ namespace node {
         GenericReader reader(ctx->schemaQueue_.front(), ctx->decoder_);
         GenericDatum *datum = new GenericDatum(ctx->schemaQueue_.front());
         //disgard the top schema
-        printf("got a schema for the datum\n");
-
+        
         //should probably lock this area for thread safe
         ctx->schemaQueue_.pop();
         //This is a blocking read
         reader.read(*datum);
 
-        printf("got datum\n");
         // Thread safe area here
         // ---------------------------------------------------------------
         // mutex lock for writing to datum on avro object. 
@@ -326,7 +310,6 @@ namespace node {
      */
     static Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
       Handle<Object> obj = Object::New();
-
       //return this Object
       if(datum.type() == avro::AVRO_RECORD){
         const avro::GenericRecord& record = datum.value<avro::GenericRecord>();
@@ -345,7 +328,12 @@ namespace node {
           datum.value<std::string>().size()
         );
       }else if(datum.type() == avro::AVRO_BYTES){
-        //obj->Set(datumName, );
+        Local<Array> byteArray = Array::New();
+        const std::vector<uint8_t> &v = datum.value<std::vector<uint8_t> >();
+        for(int i = 0;i<v.size();i++){
+          byteArray->Set(i, Uint32::New(v[i]));
+        }
+        return byteArray;        
       }else if(datum.type() == avro::AVRO_INT){
         return Number::New(datum.value<int>());
       }else if(datum.type() == avro::AVRO_LONG){
@@ -391,16 +379,23 @@ namespace node {
         }
         return datumArray;
       }else if(datum.type() == avro::AVRO_UNION){
-        std::cout << "in union" << std::endl;
+        printf("%d\n", datum.type());
       }else if(datum.type() == avro::AVRO_FIXED){
+        printf("%d\n", datum.type());
 
       }else if(datum.type() == avro::AVRO_NUM_TYPES){
+        printf("%d\n", datum.type());
 
       }else if(datum.type() == avro::AVRO_SYMBOLIC){
+        printf("%d\n", datum.type());
 
       }else if(datum.type() == avro::AVRO_UNKNOWN){
+        printf("%d\n", datum.type());
 
+      }else{
+        printf("%d\n", datum.type());
       }
+
       return obj;
     }
 
@@ -466,13 +461,15 @@ void InitAvro(Handle<Object> target){
   a_temp->InstanceTemplate()->SetInternalFieldCount(1);
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decode", Avro::DecodeFile);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeBytes", Avro::DecodeBytes);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeClose", Avro::DecodeClose);
+ // NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeBytes", Avro::DecodeBytes);
+ // NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeClose", Avro::DecodeClose);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encode", Avro::EncodeFile);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "setSchema", Avro::SetSchema);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
+//  NODE_SET_PROTOTYPE_METHOD(a_temp, "setSchema", Avro::SetSchema);
+ // NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "parseSchema", Avro::ParseSchema);
+
 /*
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeBytes", Avro::EncodeBytes);
 */

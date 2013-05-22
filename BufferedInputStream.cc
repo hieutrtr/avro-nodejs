@@ -19,7 +19,6 @@ BufferedInputStream::~BufferedInputStream(){
  */
 bool BufferedInputStream::next(const uint8_t** data, size_t* len) {
   //pthread_mutex_lock(&lock);
-  printf("reading data \n");
   pthread_mutex_lock(&lock);
   pthread_cond_wait( &cond, &lock);
   int n = data_.size();
@@ -50,7 +49,6 @@ void BufferedInputStream::backup(size_t len) {
 void BufferedInputStream::append(uint8_t* in , int len) {
   pthread_mutex_lock( &lock);
   data_.insert(data_.end(), in, in+len);
-  printf("%d size of append\n", len);
   if(len != 0){
     pthread_cond_signal( &cond );
   }
@@ -63,7 +61,6 @@ void BufferedInputStream::append(uint8_t* in , int len) {
  */
 void BufferedInputStream::skip(size_t len) {
   printf("skip count\n");
-
 }
 
 /**

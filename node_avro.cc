@@ -79,7 +79,7 @@ namespace node {
       return args.This();
     }
 
-    static void print_progress(uv_async_t *handle, int status /*UNUSED*/) {
+    static void print_progress(uv_async_t *handle, int status) {
       Avro* ctx = (Avro *)handle->data;
       // loop through datums then release lock.
       // Thread safe block here 
@@ -210,7 +210,6 @@ namespace node {
 
       return scope.Close(Undefined());
     }
-
 
     static Handle<Value> DecodeFile(const Arguments &args) {  
       HandleScope scope;
@@ -411,8 +410,6 @@ namespace node {
           return Boolean::New(datum.value<bool>());
         case avro::AVRO_NULL:
           return v8::Null();
-        case avro::AVRO_ENUM:
-          return v8::Null();
         case avro::AVRO_ARRAY:
           {
             const avro::GenericArray &genArray = datum.value<avro::GenericArray>();
@@ -445,9 +442,12 @@ namespace node {
             }
             return datumArray;
           }
+        //Unimplemented avro types
         case avro::AVRO_UNION:
 
         case avro::AVRO_FIXED:
+
+        case avro::AVRO_ENUM:
 
         case avro::AVRO_SYMBOLIC:
 
@@ -485,7 +485,7 @@ namespace node {
       }else if(callback->IsString()){
         MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
       }else{
-        //something went terribly wrong. 
+        printf("wtf\n"); 
       }
     }
 
@@ -518,9 +518,8 @@ namespace node {
       }else if(callback->IsString()){
         MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
       }else{
-        //something went terribly wrong. 
+        printf("wtf\n"); 
       }
-
     }
 
   };

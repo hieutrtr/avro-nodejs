@@ -26,43 +26,6 @@ avro.ondatum = function(datum){
   }
 };
 
-/*
-var jsonSchema = '{ "type": "record", "name": "cpx", "fields" : [{"name": "re", "type": ["double", "null"]},{"name": "im", "type" : "double", "default" : "2.0"},{"name": "name", "type": "string", "default" : "hello"},{"name": "array", "type": [{ "type": "array", "items": "string" }, "null"], "default": "null"},{"name": "map", "type": [{ "type": "map", "values": "int"}]}]}';
-
-avro1.queueSchema(jsonSchema);
-
-fs.open("data.bin", 'r', function(status, fd) {
-  fs.fstat(fd,function(err, stats){
-    var i=0;
-    var s=stats.size;
-    var buffer = new Buffer(100);
-
-    console.log('.'+"test.bin"+' '+s);
-    buf(fs,fd,0,s,buffer);
-
-    //console.log(addon.decode().length);
-  });
-});
-
-
-var buf=function(fs,fd,i,s,buffer){
-  if(i+buffer.length<s){
-    fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
-      avro1.push(b.slice(0,l));
-
-      i=i+buffer.length;
-      setTimeout(function(){
-        buf(fs,fd,i,s,buffer);}, 1);
-    });
-  }else{
-    fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
-      avro1.push(b.slice(0,l));
-      fs.close(fd);
-    });
-  }
-};
-*/
-
 client.on('connectFailed', function(error) {
     console.log('Connect Error: ' + error.toString());
 });
@@ -94,13 +57,7 @@ client.on('connect', function(connection) {
                                 ]\
                               }";
 
-          avro.queueSchema(buildingSchema,
-          function(datum){
-            console.log(datum);
-          },
-          function(error){
-
-          });
+          avro.queueSchema(buildingSchema);
         }else{
           console.log(errorFlag);
         }

@@ -19,8 +19,8 @@ struct datumBaton {
   avro::ValidSchema schema;
   avro::GenericDatum datum;
   std::string errorMessage;
-  v8::Persistent<v8::Function> onSuccess;
-  v8::Persistent<v8::Function> onError;
+  v8::Persistent<v8::Value> onSuccess;
+  v8::Persistent<v8::Value> onError;
 };
 
 namespace node {
@@ -87,12 +87,14 @@ namespace node {
       uv_mutex_lock(&ctx->datumLock_);
       for(int i = 0;i < ctx->datums_.size();i++){
         datumBaton baton = ctx->datums_[i];
-        const unsigned argc = 1;
-        Local<Value> args[argc] = { Local<Value>::New(DecodeAvro(baton.datum)) };
-
-        MakeCallback(ctx->handle_, baton.onSuccess, 1, args);
-        baton.onSuccess.Dispose();
-        baton.onError.Dispose();
+        //test to see if we have an error;
+        if(baton.errorMessage.empty()){
+          //success
+          OnDatum(ctx, baton.onSuccess, DecodeAvro(baton.datum));
+        }else{
+          //print error message
+          OnError(ctx, baton.onError, baton.errorMessage.c_str());
+        }
       }
       ctx->datums_.clear();
       uv_mutex_unlock(&ctx->datumLock_);
@@ -111,7 +113,7 @@ namespace node {
       datumBaton baton;
 
       if(!args[0]->IsString()){
-        OnError(ctx, "schema must be a string");
+        OnError(ctx, on_error, "schema must be a string");
         return scope.Close(Undefined());
       }
       //grab string from input.
@@ -122,18 +124,28 @@ namespace node {
       ValidSchema schema;
       compileJsonSchema(is, schema);
       baton.schema = schema;
-      // set onsuccess callback for the proccess struct (TODO)
-      if(args.Length() > 2 &&args[1]->IsFunction()){
-        baton.onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+      // if args > 2 and args[1] is a function set our onSuccess  
+      if(args.Length() > 2 ){
+        if(args[1]->IsFunction()){
+          baton.onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+        }else{
+          //error onSuccess must be a function
+          OnError(ctx, on_error, "onSuccess must be a callback function.");
+        }
       }else{
-
+        baton.onSuccess = on_datum;
       }
 
-      // set onerror callback for the proccess struct (TODO)
-      if(args.Length() > 3 &&args[2]->IsFunction()){
-        baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
+      // set onerror callback for the proccess struct 
+      if(args.Length() > 3 ){
+        if(args[2]->IsFunction()){
+          baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
+        }else{
+          OnError(ctx, on_error, "onError must be a callback function.");
+        }
+        //error onSuccess must be a function
       }else{
-
+        baton.onError = on_error;
       }
       // ------------------------------------------------
       // lock section here adding to queue
@@ -158,7 +170,7 @@ namespace node {
       Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
 
       if (args.Length() > 1) {
-        OnError(ctx, "Wrong number of arguments");
+        OnError(ctx, on_error, "Wrong number of arguments");
         return scope.Close(Undefined());
       }
 
@@ -182,7 +194,7 @@ namespace node {
         // release lock section here. 
 
       }else{
-        OnError(ctx, "Argument must be a Byte Array");
+        OnError(ctx, on_error, "Argument must be a Byte Array");
       }
 
       return scope.Close(Undefined());
@@ -211,13 +223,13 @@ namespace node {
           avro::GenericDatum datum(dfr.dataSchema());
 
           while(dfr.read(datum)){
-            OnDatum(ctx, DecodeAvro(datum));
+            OnDatum(ctx, on_datum, DecodeAvro(datum));
           }
         }catch(std::exception &e){
-          OnError(ctx, e.what());
+          OnError(ctx, on_error, e.what());
         }
       }else{
-        OnError(ctx, "Wrong Argument. Must be string for filename");
+        OnError(ctx, on_error, "Wrong Argument. Must be string for filename");
       }
 
       return scope.Close(Undefined());
@@ -436,20 +448,30 @@ namespace node {
     }
 
     /**
+     * converts a v8 object into a GenericDatum so that it can be encoded by avro.
+     * TODO
+     */
+    static avro::GenericDatum DecodeV8(Local<Value> datum){
+      return NULL;
+    }
+
+    /**
      * [OnError description]
      * @param error [description]
      */
-    static void OnError(Avro *ctx, const char* error){
-      HandleScope scope;
-      // locate callback from the module context if defined by script
-      // example = require('example')
-      // example.onschema = function( ... ) { ..
-      
-      assert(ctx->handle_->Get(on_error)->IsFunction() && "Invalid error handler");
+    static void OnError(Avro *ctx, Persistent<Value> callback, const char* error){
 
       Local<Value> args[1] = { String::New(error) };
 
-      MakeCallback(ctx->handle_, on_error, 1, args);
+      if(callback->IsFunction()){
+        MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 1, args);
+        //make sure to remove the callback. 
+        callback.Dispose();
+      }else if(callback->IsString()){
+        MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
+      }else{
+        //something went terribly wrong. 
+      }
     }
 
     /**
@@ -471,15 +493,19 @@ namespace node {
      * [OnDatum description]
      * @param datum [description]
      */
-    static void OnDatum(Avro *ctx, Handle<Value> datum) {
-
-      HandleScope scope;
-
-      assert(ctx->handle_->Get(on_datum)->IsFunction() && "Invalid datum handler");
+    static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum) {
 
       Local<Value> args[1] = { Local<Value>::New(datum) };
 
-      MakeCallback(ctx->handle_, on_datum, 1, args);
+      if(callback->IsFunction()){
+        MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 1, args);
+        callback.Dispose();
+      }else if(callback->IsString()){
+        MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
+      }else{
+        //something went terribly wrong. 
+      }
+
     }
 
   };

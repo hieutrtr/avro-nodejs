@@ -11,7 +11,7 @@ namespace node {
 
   uv_async_t async;
 
-  static void print_progress(uv_async_t *handle, int status);
+  static void PrintResult(uv_async_t *handle, int status);
   static void Process(uv_work_t* work_req);
   static void After(uv_work_t* work_req, int status);
   static void OnError(Avro *ctx, Persistent<Value> callback, const char* error);
@@ -31,7 +31,7 @@ namespace node {
       uv_mutex_init(&ctx->datumLock_);
       uv_mutex_init(&ctx->queueLock_);
 
-      uv_async_init(uv_default_loop(), &async, print_progress);
+      uv_async_init(uv_default_loop(), &async, PrintResult);
       //create new work_t
       uv_work_t *work_req = new uv_work_t;
       work_req->data = ctx;
@@ -44,7 +44,7 @@ namespace node {
       return args.This();
   }
 
-  static void print_progress(uv_async_t *handle, int status) {
+  static void PrintResult(uv_async_t *handle, int status) {
     Avro* ctx = (Avro *)handle->data;
     // loop through datums then release lock.
     // Thread safe block here 
@@ -282,6 +282,11 @@ namespace node {
     return scope.Close(Undefined());
   }
 
+  /**
+   * [Internal thread to process avro decode bytes in a none
+   * blocking IO manor.]
+   * @param work_req [description]
+   */
   static void Process(uv_work_t* work_req){
     Avro* ctx = (Avro *)work_req->data;
     ctx->decoder_->init(*(ctx->buffer_));

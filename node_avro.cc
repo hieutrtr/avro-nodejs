@@ -122,8 +122,17 @@ namespace node {
       //create schema
       //
       ValidSchema schema;
-      compileJsonSchema(is, schema);
+      try{
+        compileJsonSchema(is, schema);
+      }catch(std::exception &e){
+        //TODO should send back the bad schema for user reference. 
+        OnError(ctx, on_error, e.what());
+        return scope.Close(Undefined());
+      }
+
       baton.schema = schema;
+
+
       // if args > 2 and args[1] is a function set our onSuccess  
       if(args.Length() > 2 ){
         if(args[1]->IsFunction()){
@@ -131,6 +140,7 @@ namespace node {
         }else{
           //error onSuccess must be a function
           OnError(ctx, on_error, "onSuccess must be a callback function.");
+          return scope.Close(Undefined());
         }
       }else{
         baton.onSuccess = on_datum;
@@ -142,6 +152,7 @@ namespace node {
           baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
         }else{
           OnError(ctx, on_error, "onError must be a callback function.");
+          return scope.Close(Undefined());
         }
         //error onSuccess must be a function
       }else{
@@ -359,92 +370,96 @@ namespace node {
     static Handle<Value> DecodeAvro(const avro::GenericDatum& datum){
       Handle<Object> obj = Object::New();
       //return this Object
-      if(datum.type() == avro::AVRO_RECORD){
-        const avro::GenericRecord& record = datum.value<avro::GenericRecord>();
-        const avro::NodePtr& node = record.schema();
-        Handle<Object> obj = Object::New();
-        for(uint i = 0; i<record.fieldCount(); i++){
-          //Add values
-          Local<String> datumName = String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
-          const avro::GenericDatum& subDatum = record.fieldAt(i);
-          obj->Set(datumName, DecodeAvro(subDatum));
-        }
-        return obj;
-      }else if(datum.type() == avro::AVRO_STRING){
-        return  String::New(
-          datum.value<std::string>().c_str(),
-          datum.value<std::string>().size()
-        );
-      }else if(datum.type() == avro::AVRO_BYTES){
-        Local<Array> byteArray = Array::New();
-        const std::vector<uint8_t> &v = datum.value<std::vector<uint8_t> >();
-        for(int i = 0;i<v.size();i++){
-          byteArray->Set(i, Uint32::New(v[i]));
-        }
-        return byteArray;        
-      }else if(datum.type() == avro::AVRO_INT){
-        return Number::New(datum.value<int>());
-      }else if(datum.type() == avro::AVRO_LONG){
-        return Number::New(datum.value<long>());
-      }else if(datum.type() == avro::AVRO_FLOAT){
-        return Number::New(datum.value<float>());
-      }else if(datum.type() == avro::AVRO_DOUBLE){
-        return Number::New(datum.value<double>());
-      }else if(datum.type() == avro::AVRO_BOOL){
-        return Boolean::New(datum.value<bool>());
-      }else if(datum.type() == avro::AVRO_NULL){
-        return v8::Null();
-      }else if(datum.type() == avro::AVRO_RECORD){
-        return DecodeAvro(datum.value<avro::GenericDatum>());
-      }else if(datum.type() == avro::AVRO_ENUM){
-        return v8::Null();
-      }else if(datum.type() == avro::AVRO_ARRAY){
-        const avro::GenericArray &genArray = datum.value<avro::GenericArray>();
+      switch(datum.type())
+      {
+        case avro::AVRO_RECORD:
+          {
+            const avro::GenericRecord& record = datum.value<avro::GenericRecord>();
+            const avro::NodePtr& node = record.schema();
+            Handle<Object> obj = Object::New();
+            for(uint i = 0; i<record.fieldCount(); i++){
+              //Add values
+              Local<String> datumName = String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
+              const avro::GenericDatum& subDatum = record.fieldAt(i);
+              obj->Set(datumName, DecodeAvro(subDatum));
+            }
+            return obj;
+          }
+        case avro::AVRO_STRING:
+          return  String::New(
+            datum.value<std::string>().c_str(),
+            datum.value<std::string>().size()
+          );
+        case avro::AVRO_BYTES:
+          {
+            Local<Array> byteArray = Array::New();
+            const std::vector<uint8_t> &v = datum.value<std::vector<uint8_t> >();
+            for(int i = 0;i<v.size();i++){
+              byteArray->Set(i, Uint32::New(v[i]));
+            }
+            return byteArray;
+          }        
+        case avro::AVRO_INT:
+          return Number::New(datum.value<int>());
+        case avro::AVRO_LONG:
+          return Number::New(datum.value<long>());
+        case avro::AVRO_FLOAT:
+          return Number::New(datum.value<float>());
+        case avro::AVRO_DOUBLE:
+          return Number::New(datum.value<double>());
+        case avro::AVRO_BOOL:
+          return Boolean::New(datum.value<bool>());
+        case avro::AVRO_NULL:
+          return v8::Null();
+        case avro::AVRO_ENUM:
+          return v8::Null();
+        case avro::AVRO_ARRAY:
+          {
+            const avro::GenericArray &genArray = datum.value<avro::GenericArray>();
 
-        const std::vector<avro::GenericDatum> &v = genArray.value();
-        Local<Array> datumArray = Array::New();
-        int i = 0;
-        for(std::vector<avro::GenericDatum>::const_iterator it = v.begin(); it != v.end(); ++it) {
-          const avro::GenericDatum &itDatum = * it;
-          datumArray->Set(i, DecodeAvro(itDatum));
-          i++;
-        }
-        return datumArray;
-      }else if(datum.type() == avro::AVRO_MAP){
-        const avro::GenericMap &genMap = datum.value<avro::GenericMap>();
+            const std::vector<avro::GenericDatum> &v = genArray.value();
+            Local<Array> datumArray = Array::New();
+            int i = 0;
+            for(std::vector<avro::GenericDatum>::const_iterator it = v.begin(); it != v.end(); ++it) {
+              const avro::GenericDatum &itDatum = * it;
+              datumArray->Set(i, DecodeAvro(itDatum));
+              i++;
+            }
+            return datumArray;
+          }
+        case avro::AVRO_MAP:
+          {
+            const avro::GenericMap &genMap = datum.value<avro::GenericMap>();
 
-        const std::vector < std::pair < std::string, avro::GenericDatum > > &v = genMap.value();
-        Local<Array> datumArray = Array::New();
-        int i = 0;
-        for(std::vector< std::pair < std::string, avro::GenericDatum> >::const_iterator it = v.begin(); it != v.end(); ++it) {
-          const std::pair < std::string, avro::GenericDatum> &itDatum = * it;
-          datumArray->Set(String::New(
-            itDatum.first.c_str(),
-            itDatum.first.size()
-            ),DecodeAvro(itDatum.second));
+            const std::vector < std::pair < std::string, avro::GenericDatum > > &v = genMap.value();
+            Local<Array> datumArray = Array::New();
+            int i = 0;
+            for(std::vector< std::pair < std::string, avro::GenericDatum> >::const_iterator it = v.begin(); it != v.end(); ++it) {
+              const std::pair < std::string, avro::GenericDatum> &itDatum = * it;
+              datumArray->Set(String::New(
+                itDatum.first.c_str(),
+                itDatum.first.size()
+                ),DecodeAvro(itDatum.second));
 
-          i++;
-        }
-        return datumArray;
-      }else if(datum.type() == avro::AVRO_UNION){
-        printf("%d\n", datum.type());
-      }else if(datum.type() == avro::AVRO_FIXED){
-        printf("%d\n", datum.type());
+              i++;
+            }
+            return datumArray;
+          }
+        case avro::AVRO_UNION:
 
-      }else if(datum.type() == avro::AVRO_NUM_TYPES){
-        printf("%d\n", datum.type());
+        case avro::AVRO_FIXED:
 
-      }else if(datum.type() == avro::AVRO_SYMBOLIC){
-        printf("%d\n", datum.type());
+        case avro::AVRO_SYMBOLIC:
 
-      }else if(datum.type() == avro::AVRO_UNKNOWN){
-        printf("%d\n", datum.type());
+        case avro::AVRO_UNKNOWN:
 
-      }else{
-        printf("%d\n", datum.type());
+        default:
+          {
+            printf("%d\n", datum.type());
+            return obj;
+          }
       }
 
-      return obj;
     }
 
     /**
@@ -523,11 +538,8 @@ void InitAvro(Handle<Object> target){
   a_temp->InstanceTemplate()->SetInternalFieldCount(1);
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decode", Avro::DecodeFile);
- // NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeBytes", Avro::DecodeBytes);
- // NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeClose", Avro::DecodeClose);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encode", Avro::EncodeFile);
-//  NODE_SET_PROTOTYPE_METHOD(a_temp, "setSchema", Avro::SetSchema);
- // NODE_SET_PROTOTYPE_METHOD(a_temp, "getSchema", Avro::GetSchema);
+
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "parseDatum", Avro::ParseDatum);

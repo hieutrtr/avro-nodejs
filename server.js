@@ -14,7 +14,7 @@ avro.onschema = function(schema){
 };
 
 avro.onerror = function(error){
-  console.log("error");
+  console.log(error);
 };
 
 avro.ondatum = function(datum){
@@ -81,10 +81,7 @@ client.on('connect', function(connection) {
       connection.sendUTF(message.utf8Data);
     }
     else if (message.type === 'binary') {
-      console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
-      console.log('Received Binary Message of ' + message.binaryData + ' ');
       avro.push(message.binaryData);
-      //connection.sendBytes(message.binaryData);
     }
   });
 

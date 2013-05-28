@@ -59,7 +59,7 @@ Then setup the needed paths in the binding.gyp file. After that we can build avr
 			
 
 
-Copyright (c) 2013 Benjamin Metzger <ben@metzger.cc>
+Copyright (c) 2013 Gensler <ben@metzger.cc>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

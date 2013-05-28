@@ -19,7 +19,7 @@ static void After(uv_work_t* work_req, int status);
 static void OnError(Avro *ctx, Persistent<Value> callback, const char* error);
 static void OnSchema(Avro *ctx, const char* schema);
 static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum);
-static avro::GenericDatum DecodeV8(GenericDatum datum, Local<Value> object);
+avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object);
 
 Handle<Value> Avro::New(const Arguments& args){
     HandleScope scope;
@@ -142,7 +142,7 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
 }
 
 /**
- * Push bytes to BufferedInputStream
+ * Sending bytes to the decode async thread loop.
  */
 Handle<Value> Avro::Push(const Arguments &args){
   HandleScope scope;
@@ -179,6 +179,13 @@ Handle<Value> Avro::Push(const Arguments &args){
   return scope.Close(Undefined());
 }
 
+/**
+ * Takes a avro data file that must contain the schema definition
+ * as part of the file. For each datum that is parsed out of the file
+ * OnDatum will be called. 
+ * TODO change this to provide a callback for on datum and on error.
+ * @param avrofile
+ */
 Handle<Value> Avro::DecodeFile(const Arguments &args) {  
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
@@ -212,8 +219,13 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
 
   return scope.Close(Undefined());
 }
-
-Handle<Value> Avro::ParseDatum(const Arguments &args){
+/**
+ * The sync version of decode datum. The buffer of bytes provided must 
+ * contain the entire datum to be decoded. Otherwise an error will be thrown.
+ * @param schema
+ * @param bytes
+ */
+Handle<Value> Avro::DecodeDatum(const Arguments &args){
   HandleScope scope;
   if(args.Length() > 2){
     ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
@@ -246,6 +258,13 @@ Handle<Value> Avro::ParseDatum(const Arguments &args){
   return scope.Close(Undefined());
 }
 
+/**
+ * Encodes datum(s) to a file specified.
+ *
+ * @param filename
+ * @param schema
+ * @param datums
+ */
 Handle<Value> Avro::EncodeFile(const Arguments &args) { 
   HandleScope scope; 
   /*
@@ -285,7 +304,9 @@ Handle<Value> Avro::EncodeFile(const Arguments &args) {
   return scope.Close(Undefined());
 }
 /**
- * 
+ * Provides a sync function to encode a datum.
+ * @param schema
+ * @param datum
  */
 Handle<Value> Avro::EncodeDatum(const Arguments &args){
   HandleScope scope;
@@ -317,7 +338,7 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
 
   Local<Value> object = args[1];
   avro::GenericDatum datum(schema);
-  datum = DecodeV8(datum, object);
+  datum = DecodeV8(ctx, datum, object);
 
   std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
   avro::EncoderPtr e = avro::validatingEncoder(schema,
@@ -332,8 +353,9 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
 
   avro::StreamReader reader(*in);
   int i = 0;
+  // could initialize a buffer and then do a while read of x chunk say 4k
   Local<Array> byteArray = Array::New();
-  while(i < out->byteCount()){
+  while(reader.hasMore()){
     byteArray->Set(i, Uint32::New(reader.read()));
     i++;
   }
@@ -382,6 +404,12 @@ static void Process(uv_work_t* work_req){
 }
 
 //v8 land!
+/**
+ * This is the function that is called directly after the Process function
+ * is finished. Currently it runs the entire lifetime of Avro instance. 
+ * @param work_req [description]
+ * @param status   [description]
+ */
 static void After(uv_work_t* work_req, int status){
   HandleScope scope;
 }
@@ -489,9 +517,7 @@ Handle<Value> Avro::DecodeAvro(const avro::GenericDatum& datum){
  * converts a v8 object into a GenericDatum so that it can be encoded by avro.
  * TODO
  */
-avro::GenericDatum DecodeV8(GenericDatum datum, Local<Value> object){
-
-  //printf("number of leaves %d  %d\n ", node->leaves(), node->type());
+avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
 
   switch(datum.type())
   {
@@ -504,18 +530,20 @@ avro::GenericDatum DecodeV8(GenericDatum datum, Local<Value> object){
           
           for(uint i = 0; i<record.fieldCount(); i++){
             //Add values
-            printf("%s\n", node->nameAt(i).c_str());
             Local<String> datumName = String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
-            const avro::GenericDatum& subDatum = record.fieldAt(i);
-            datum.value<avro::GenericRecord>().fieldAt(i) = DecodeV8(subDatum, obj->Get(datumName));
+            datum.value<avro::GenericRecord>().fieldAt(i) = DecodeV8(ctx, record.fieldAt(i), obj->Get(datumName));
           }
+        }else{
+          OnError(ctx, on_error, "ERROR: Encoding AVRO_RECORD does not match javascript object.");
         }
       }
       break;
     case avro::AVRO_STRING:
       if(object->IsString()){
-        v8::String::Utf8Value filename(object->ToString());
-        datum.value<std::string>() = *filename;
+        v8::String::Utf8Value avroString(object->ToString());
+        datum.value<std::string>() = *avroString;
+      }else{
+        OnError(ctx, on_error, "ERROR: Encoding AVRO_STRING does not match javascript object.");
       }
       break;
     case avro::AVRO_BYTES:
@@ -523,40 +551,70 @@ avro::GenericDatum DecodeV8(GenericDatum datum, Local<Value> object){
 
         if(object->IsObject()){
           Local<Object> array = object->ToObject();
-          printf("we got bytes\n");
           //get length of buffer
           int len = Buffer::Length(array);
           uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(array));
           std::vector<uint8_t> bytes;
           bytes.insert(bytes.end(), in, in+len);
           datum.value<std::vector<uint8_t> >() = bytes;
+        }else{
+          OnError(ctx, on_error, "ERROR: Encoding AVRO_BYTES does not match javascript object (must be Buffer object).");
         }
       }
       break;       
     case avro::AVRO_INT:
       if(object->IsInt32()){
         datum.value<int32_t>() = object->Int32Value() ;
+      }else{
+        OnError(ctx, on_error, "ERROR: Encoding AVRO_INT does not match javascript object.");
       }
       break;       
     case avro::AVRO_LONG:
       if(object->IsUint32()){
         datum.value<int64_t>() = object->IntegerValue() ;
+      }else{
+        OnError(ctx, on_error, "ERROR: Encoding AVRO_LONG does not match javascript object.");
       }
       break;       
     case avro::AVRO_FLOAT:
+      OnError(ctx, on_error, "ERROR: Encoding AVRO_FLOAT not implemented.");
       break;       
     case avro::AVRO_DOUBLE:
+      OnError(ctx, on_error, "ERROR: Encoding AVRO_DOUBLE not implemented.");
       break;       
     case avro::AVRO_BOOL:
       if(object->IsBoolean()){
         datum.value<bool>() = object->ToBoolean()->Value();
+      }else{
+        OnError(ctx, on_error, "ERROR: Encoding AVRO_BOOL does not match javascript object.");
       }
       break;
     case avro::AVRO_NULL:
       break;       
     case avro::AVRO_ARRAY:
+      OnError(ctx, on_error, "ERROR: Encoding AVRO_ARRAY not implemented.");
       break;
     case avro::AVRO_MAP:
+      {
+        if(object->IsObject()){
+          Local<Object> map = object->ToObject();
+          avro::GenericMap &genMap = datum.value<avro::GenericMap>();
+          const avro::NodePtr& node = genMap.schema();
+          //gets the second value of map first is always string as defined by avro
+          GenericDatum mapped(node->leafAt(1));
+          Local<Array> propertyNames = map->GetPropertyNames();
+          std::vector < std::pair < std::string, avro::GenericDatum > > &v = genMap.value();;
+          for(int i = 0;i<propertyNames->Length();i++){
+            Local<String> key = propertyNames->Get(i)->ToString();
+            v8::String::Utf8Value propertyName(key);
+            std::pair<std::string, avro::GenericDatum> leaf(*propertyName, DecodeV8(ctx, mapped, map->Get(key)));
+            v.push_back(leaf);
+          }
+          genMap.value() = v;
+
+          datum.value<avro::GenericMap>() = genMap;
+        }
+      }
       break;       
     //Unimplemented avro types
     case avro::AVRO_UNION:
@@ -645,7 +703,7 @@ void Avro::Initialize(Handle<Object> target){
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "parseDatum", Avro::ParseDatum);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeDatum", Avro::DecodeDatum);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeDatum", Avro::EncodeDatum);
 
 

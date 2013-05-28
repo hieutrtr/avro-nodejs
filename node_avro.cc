@@ -191,9 +191,35 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
 
-  if (args.Length() > 1) {
+  if (args.Length() < 1) {
     ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());
+  }
+  datumBaton baton;
+    // if args > 2 and args[1] is a function set our onSuccess  
+  if(args.Length() > 2 ){
+    if(args[1]->IsFunction()){
+      baton.onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
+    }else{
+      //error onSuccess must be a function
+      OnError(ctx, on_error, "onSuccess must be a callback function.");
+      return scope.Close(Undefined());
+    }
+  }else{
+    baton.onSuccess = on_datum;
+  }
+
+  // set onerror callback for the proccess struct 
+  if(args.Length() > 3 ){
+    if(args[2]->IsFunction()){
+      baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
+    }else{
+      OnError(ctx, on_error, "onError must be a callback function.");
+      return scope.Close(Undefined());
+    }
+    //error onSuccess must be a function
+  }else{
+    baton.onError = on_error;
   }
 
   if(args[0]->IsString()){
@@ -205,14 +231,18 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
       ValidSchema schema = dfr.dataSchema();
       std::ostringstream oss(std::ios_base::out);
       schema.toJson(oss);
-      OnSchema(ctx, oss.str().c_str());
+      //OnSchema(ctx, oss.str().c_str());
       avro::GenericDatum datum(dfr.dataSchema());
 
       while(dfr.read(datum)){
-        OnDatum(ctx, on_datum, DecodeAvro(datum));
+        OnDatum(ctx, baton.onSuccess, DecodeAvro(datum));
+      }
+      
+      if(baton.onSuccess->IsFunction()){
+        baton.onSuccess.Dispose();
       }
     }catch(std::exception &e){
-      OnError(ctx, on_error, e.what());
+      OnError(ctx, baton.onError, e.what());
     }
   }else{
     OnError(ctx, on_error, "Wrong Argument. Must be string for filename");
@@ -233,6 +263,8 @@ Handle<Value> Avro::DecodeDatum(const Arguments &args){
     return scope.Close(Undefined());        
   }
 
+  // throws error if there is no Buffer instance for 
+  // args[1].
   if(args[0]->IsString()&&Buffer::HasInstance(args[1])){
     //create schema from string
     v8::String::Utf8Value schemaString(args[0]->ToString());
@@ -660,12 +692,12 @@ static void OnError(Avro *ctx, Persistent<Value> callback, const char* error){
 
   if(callback->IsFunction()){
     MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 1, args);
-    //make sure to remove the callback. 
-    callback.Dispose();
+    //make sure to remove the callback. Actually don't do that here. 
+    //callback.Dispose();
   }else if(callback->IsString()){
     MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
   }else{
-    printf("wtf\n"); 
+    printf("error wtf\n"); 
   }
 }
 
@@ -694,11 +726,11 @@ static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum) 
 
   if(callback->IsFunction()){
     MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 1, args);
-    callback.Dispose();
+    //callback.Dispose();
   }else if(callback->IsString()){
     MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
   }else{
-    printf("wtf\n"); 
+    printf("datum wtf\n"); 
   }
 }
 
@@ -713,8 +745,8 @@ void Avro::Initialize(Handle<Object> target){
 
   a_temp->InstanceTemplate()->SetInternalFieldCount(1);
 
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "decode", Avro::DecodeFile);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "encode", Avro::EncodeFile);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeFile", Avro::DecodeFile);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeFile", Avro::EncodeFile);
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);

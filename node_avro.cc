@@ -228,7 +228,7 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
  */
 Handle<Value> Avro::DecodeDatum(const Arguments &args){
   HandleScope scope;
-  if(args.Length() > 2){
+  if(args.Length() != 2){
     ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());        
   }

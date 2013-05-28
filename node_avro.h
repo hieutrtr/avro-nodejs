@@ -49,7 +49,7 @@ private:
   static v8::Handle<v8::Value> DecodeFile(const v8::Arguments &args);
   static v8::Handle<v8::Value> EncodeFile(const v8::Arguments &args);
   static v8::Handle<v8::Value> EncodeDatum(const v8::Arguments &args);
-  static v8::Handle<v8::Value> ParseDatum(const v8::Arguments &args);
+  static v8::Handle<v8::Value> DecodeDatum(const v8::Arguments &args);
 
 };
 }

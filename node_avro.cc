@@ -381,10 +381,14 @@ static void Process(uv_work_t* work_req){
     GenericDatum *datum = new GenericDatum(baton.schema);
     //disgard the top schema
     
-    //should probably lock this area for thread safe
+    // Thread safe area here
+    // ---------------------------------------------------------------
     uv_mutex_lock(&ctx->queueLock_);
     ctx->processQueue_.pop();
     uv_mutex_unlock(&ctx->queueLock_);
+    //Thread safe area leave
+    // ---------------------------------------------------------------
+    
     //This is a blocking read
     reader.read(*datum);
     baton.datum = *datum;
@@ -403,7 +407,6 @@ static void Process(uv_work_t* work_req){
   }
 }
 
-//v8 land!
 /**
  * This is the function that is called directly after the Process function
  * is finished. Currently it runs the entire lifetime of Avro instance. 
@@ -514,8 +517,11 @@ Handle<Value> Avro::DecodeAvro(const avro::GenericDatum& datum){
 }
 
 /**
- * converts a v8 object into a GenericDatum so that it can be encoded by avro.
- * TODO
+ * [DecodeV8 description]
+ * @param  ctx    [The avro context object for error handling.]
+ * @param  datum  [The datum that is being built up for return.]
+ * @param  object [The Javascript object that is being converted to a GenericDatum]
+ * @return        [description]
  */
 avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
 
@@ -585,7 +591,7 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
       break;       
     case avro::AVRO_DOUBLE:
       if(object->IsNumber()){
-        datum.value<double>() = object->NumberValue() ;
+        datum.value<double>() = object->NumberValue();
       }else{
         OnError(ctx, on_error, "ERROR: Encoding AVRO_DOUBLE does not match javascript object.");
       }
@@ -608,7 +614,7 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
           Local<Object> map = object->ToObject();
           avro::GenericMap &genMap = datum.value<avro::GenericMap>();
           const avro::NodePtr& node = genMap.schema();
-          //gets the second value of map first is always string as defined by avro
+          //gets the second value of the map. The first is always string as defined by avro
           GenericDatum mapped(node->leafAt(1));
           Local<Array> propertyNames = map->GetPropertyNames();
           std::vector < std::pair < std::string, avro::GenericDatum > > &v = genMap.value();;

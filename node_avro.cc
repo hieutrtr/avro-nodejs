@@ -580,7 +580,11 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
       OnError(ctx, on_error, "ERROR: Encoding AVRO_FLOAT not implemented.");
       break;       
     case avro::AVRO_DOUBLE:
-      OnError(ctx, on_error, "ERROR: Encoding AVRO_DOUBLE not implemented.");
+      if(object->IsNumber()){
+        datum.value<double>() = object->NumberValue() ;
+      }else{
+        OnError(ctx, on_error, "ERROR: Encoding AVRO_DOUBLE does not match javascript object.");
+      }
       break;       
     case avro::AVRO_BOOL:
       if(object->IsBoolean()){

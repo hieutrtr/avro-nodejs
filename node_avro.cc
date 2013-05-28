@@ -171,6 +171,7 @@ Handle<Value> Avro::Push(const Arguments &args){
     uv_mutex_unlock(&ctx->datumLock_);      
     // ------------------------------------------------
     // release lock section here. 
+    
 
   }else{
     OnError(ctx, on_error, "Argument must be a Byte Array");
@@ -232,7 +233,7 @@ Handle<Value> Avro::DecodeDatum(const Arguments &args){
     return scope.Close(Undefined());        
   }
 
-  if(args[0]->IsString()&&args[1]->IsObject()){
+  if(args[0]->IsString()&&Buffer::HasInstance(args[1])){
     //create schema from string
     v8::String::Utf8Value schemaString(args[0]->ToString());
     std::istringstream is(*schemaString);

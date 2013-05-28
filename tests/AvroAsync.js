@@ -16,12 +16,12 @@ avro.ondatum = function(datum){
   console.log("onDatum",datum);
 };
 var buildingSchema = '{\
-    "name": "com.gensler.models.organizations.Organization",\
+    "name": "Organization",\
     "type": "record",\
     "fields": [\
       { "name": "id", "type": \
         {\
-          "name": "com.gensler.models.common.GUID",\
+          "name": "GUID",\
           "type": "record",\
           "fields": [\
             { "name": "bytes", "type": "bytes"}\
@@ -34,12 +34,12 @@ var buildingSchema = '{\
   }';
 
 var complexSchema = '{\
-  "name": "com.gensler.organizations.GetOrganization",\
+  "name": "GetOrganization",\
   "type": "record",\
   "fields": [\
     { "name": "id", "type": \
       {\
-        "name": "com.gensler.models.common.GUID",\
+        "name": "GUID",\
         "type": "record",\
         "fields": [\
           { "name": "bytes", "type": "bytes"}\
@@ -83,10 +83,10 @@ client.on('connect', function(connection) {
     }
   });
   connection.sendBytes(new Buffer(avro.encodeDatum(map, {sequence: new Buffer(avro.encodeDatum('"long"', 12345))})));
-  connection.sendBytes(new Buffer(avro.encodeDatum('"string"', "com.gensler.organizations.GetOrganization")));
+  connection.sendBytes(new Buffer(avro.encodeDatum('"string"', "GetOrganization")));
   connection.sendBytes(new Buffer(avro.encodeDatum(complexSchema, { id: { bytes: new Buffer([8,-85,-51,18,52]) }})));
 });
 
 //example of web connection String
-client.connect('ws://node1.genslerwi.com:9000/api/gis-data-api/0.1.0');
+client.connect('ws://localhost:9000/');
 

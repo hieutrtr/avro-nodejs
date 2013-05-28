@@ -2,13 +2,13 @@
 
 A wrapper for the c++ implemenation of Avro.
 
-#Why
+#The Why
 
-  Javascript is a async callback world so the avro library should play in that world. 
+  Javascript is a async callback world so the avro library should play in that world. I've also seen far too many partially completed avro javascript projects on github. 
 
 #API
 
-###Avro sync functionality
+###Avro sync
 
   avro.encodeDatum(schema, value);
 
@@ -20,7 +20,7 @@ A wrapper for the c++ implemenation of Avro.
     var bytes = avro.encodeDatum('"float"', 12345.89);
     avro.decodeDatum('"float"', new Buffer(bytes));
 
-###Avro async functionality
+###Avro async
 
   avro.queueSchema(schema, onSuccess, onError);
 
@@ -50,8 +50,7 @@ A wrapper for the c++ implemenation of Avro.
 
     node server.js
 
-
-
+			
 
 
 Copyright (c) 2013 Benjamin Metzger <ben@metzger.cc>

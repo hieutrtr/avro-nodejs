@@ -45,7 +45,8 @@ var complexSchema = '{\
 
 
 var map = '{"type": "map","values": "bytes"}';
-
+// Some of the types supported
+// TODO finish off examples.
 var mapResult = avro.decodeDatum(map, new Buffer(avro.encodeDatum(map, {sequence: new Buffer(avro.encodeDatum('"long"', 12345))})));
 var booleanResult = avro.decodeDatum('"boolean"', new Buffer(avro.encodeDatum('"boolean"', true )));
 var stringResult = avro.decodeDatum('"string"', new Buffer(avro.encodeDatum('"string"', "A string to parse" )));
@@ -58,4 +59,6 @@ console.log("long result: ", longResult);
 console.log("string result: ", stringResult);
 console.log("complex result: ", complexResult);
 
+//Since avro starts another thread in the background for reading data to stop node 
+// we need to send a kill to the process.
 process.kill();

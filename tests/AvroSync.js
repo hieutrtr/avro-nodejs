@@ -10,12 +10,12 @@ avro.onerror = function(error){
 };
 
 var buildingSchema = '{\
-    "name": "com.gensler.models.organizations.Organization",\
+    "name": "Organization",\
     "type": "record",\
     "fields": [\
       { "name": "id", "type": \
         {\
-          "name": "com.gensler.models.common.GUID",\
+          "name": "GUID",\
           "type": "record",\
           "fields": [\
             { "name": "bytes", "type": "bytes"}\
@@ -28,12 +28,12 @@ var buildingSchema = '{\
   }';
 
 var complexSchema = '{\
-  "name": "com.gensler.organizations.GetOrganization",\
+  "name": "GetOrganization",\
   "type": "record",\
   "fields": [\
     { "name": "id", "type": \
       {\
-        "name": "com.gensler.models.common.GUID",\
+        "name": "common.GUID",\
         "type": "record",\
         "fields": [\
           { "name": "bytes", "type": "bytes"}\

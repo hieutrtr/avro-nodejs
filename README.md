@@ -46,6 +46,12 @@ A wrapper for the c++ implemenation of Avro.
 
 #Build and run
 
+	
+Install and build the avro c++ project found.
+<https://github.com/apache/avro>
+
+Then setup the needed paths in the binding.gyp file. After that we can build avro-nodejs.
+
     node-gyp configure build
 
     node server.js

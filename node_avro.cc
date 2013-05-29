@@ -19,6 +19,7 @@ static void After(uv_work_t* work_req, int status);
 static void OnError(Avro *ctx, Persistent<Value> callback, const char* error);
 static void OnSchema(Avro *ctx, const char* schema);
 static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum);
+void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int startPos);
 avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object);
 
 Handle<Value> Avro::New(const Arguments& args){
@@ -100,32 +101,9 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
 
   baton.schema = schema;
 
-
   // if args > 2 and args[1] is a function set our onSuccess  
-  if(args.Length() > 2 ){
-    if(args[1]->IsFunction()){
-      baton.onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-    }else{
-      //error onSuccess must be a function
-      OnError(ctx, on_error, "onSuccess must be a callback function.");
-      return scope.Close(Undefined());
-    }
-  }else{
-    baton.onSuccess = on_datum;
-  }
+  handleCallbacks(ctx, &baton, args, 1);
 
-  // set onerror callback for the proccess struct 
-  if(args.Length() > 3 ){
-    if(args[2]->IsFunction()){
-      baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
-    }else{
-      OnError(ctx, on_error, "onError must be a callback function.");
-      return scope.Close(Undefined());
-    }
-    //error onSuccess must be a function
-  }else{
-    baton.onError = on_error;
-  }
   // ------------------------------------------------
   // lock section here adding to queue
   uv_mutex_lock(&ctx->queueLock_);
@@ -197,30 +175,7 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
   }
   datumBaton baton;
     // if args > 2 and args[1] is a function set our onSuccess  
-  if(args.Length() > 2 ){
-    if(args[1]->IsFunction()){
-      baton.onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[1]));
-    }else{
-      //error onSuccess must be a function
-      OnError(ctx, on_error, "onSuccess must be a callback function.");
-      return scope.Close(Undefined());
-    }
-  }else{
-    baton.onSuccess = on_datum;
-  }
-
-  // set onerror callback for the proccess struct 
-  if(args.Length() > 3 ){
-    if(args[2]->IsFunction()){
-      baton.onError = Persistent<Function>::New(Handle<Function>::Cast(args[2]));
-    }else{
-      OnError(ctx, on_error, "onError must be a callback function.");
-      return scope.Close(Undefined());
-    }
-    //error onSuccess must be a function
-  }else{
-    baton.onError = on_error;
-  }
+  handleCallbacks(ctx, &baton, args, 1);
 
   if(args[0]->IsString()){
     // get the param
@@ -231,7 +186,6 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
       ValidSchema schema = dfr.dataSchema();
       std::ostringstream oss(std::ios_base::out);
       schema.toJson(oss);
-      //OnSchema(ctx, oss.str().c_str());
       avro::GenericDatum datum(dfr.dataSchema());
 
       while(dfr.read(datum)){
@@ -680,6 +634,39 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
       }
   }
   return datum;
+}
+
+/**
+ * Parses out the two callbacks for the arguments. It is assumed that they are 
+ * defined in pairs. OnSuccess, OnError.  
+ * @param ctx              [Our Avro Object]
+ * @param baton            [the baton we're setting the callbacks on]
+ * @param args             [The arguments]
+ * @param startingPosition [The starting position to look for the callbacks in the Arugments]
+ */
+void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int startPos){
+  if(args.Length() > startPos+1 ){
+    if(args[startPos]->IsFunction()){
+      baton->onSuccess = Persistent<Function>::New(Handle<Function>::Cast(args[startPos]));
+    }else{
+      //error onSuccess must be a function
+      OnError(ctx, on_error, "onSuccess must be a callback function.");
+    }
+  }else{
+    baton->onSuccess = on_datum;
+  }
+  startPos++;
+  // set onerror callback for the proccess struct 
+  if(args.Length() > startPos+1 ){
+    if(args[startPos]->IsFunction()){
+      baton->onError = Persistent<Function>::New(Handle<Function>::Cast(args[startPos]));
+    }else{
+      OnError(ctx, on_error, "onError must be a callback function.");
+    }
+    //error onSuccess must be a function
+  }else{
+    baton->onError = on_error;
+  }
 }
 
 /**

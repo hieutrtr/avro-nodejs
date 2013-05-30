@@ -20,6 +20,7 @@ static void OnError(Avro *ctx, Persistent<Value> callback, const char* error);
 static void OnSchema(Avro *ctx, const char* schema);
 static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum);
 void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int startPos);
+void unionBranch(GenericDatum *datum, char *type);
 avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object);
 
 Handle<Value> Avro::New(const Arguments& args){
@@ -319,7 +320,7 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
     compileJsonSchema(is, schema);
   }catch(std::exception &e){
     //TODO should send back the bad schema for user reference. 
-    OnError(ctx, on_error, e.what());
+    OnError(ctx, on_error, "Error: compiling schema for EncodeDatum");
     return scope.Close(Undefined());
   }
 
@@ -332,7 +333,13 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
          avro::binaryEncoder());
 
   e->init(*out);
-  avro::encode(*e, datum);
+  try{
+    avro::encode(*e, datum);
+  }catch(std::exception &e){
+    std::string error = e.what();
+    std::string errorMessage = error + *schemaString;
+    OnError(ctx, on_error, errorMessage.c_str());
+  }
   //need to flush the bytes to the stream (aka out);
   e->flush();
 
@@ -487,9 +494,16 @@ Handle<Value> Avro::DecodeAvro(const avro::GenericDatum& datum){
     case avro::AVRO_UNION:
 
     case avro::AVRO_FIXED:
-
-    case avro::AVRO_ENUM:
-
+      {
+        
+        Local<Array> fixedBytes = Array::New();
+        const avro::GenericFixed &genFixed = datum.value<avro::GenericFixed>();
+        const std::vector<uint8_t> &v = genFixed.value();
+        for(int i = 0;i<v.size();i++){
+          fixedBytes->Set(i, Uint32::New(v[i]));
+        }
+        return fixedBytes;
+      }
     case avro::AVRO_SYMBOLIC:
 
     case avro::AVRO_UNKNOWN:
@@ -512,22 +526,42 @@ Handle<Value> Avro::DecodeAvro(const avro::GenericDatum& datum){
  */
 avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
 
+  //if the datum is a union we want to try
+  // and pick the right branch. 
+  if(datum.isUnion()){
+    char *type;
+    if(!object->IsNull()){
+      Local<Object> obj = object->ToObject();
+      Local<Array> properties = obj->GetPropertyNames();
+      Local<Value> typeObject = properties->Get(0);
+      //Set the object to the value of the union. 
+      object = obj->Get(typeObject->ToString());
+
+      v8::String::Utf8Value typeString(typeObject->ToString());
+      unionBranch(&datum, *typeString);
+    }else{
+      unionBranch(&datum, "null");
+    }
+    
+  }
+
   switch(datum.type())
   {
     case avro::AVRO_RECORD:
       {
-        if(object->IsObject()){
+        try{
           Local<Object> obj = object->ToObject();
           const avro::GenericRecord& record = datum.value<avro::GenericRecord>();
           const avro::NodePtr& node = record.schema();
-          
           for(uint i = 0; i<record.fieldCount(); i++){
             //Add values
             Local<String> datumName = String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
             datum.value<avro::GenericRecord>().fieldAt(i) = DecodeV8(ctx, record.fieldAt(i), obj->Get(datumName));
           }
-        }else{
-          OnError(ctx, on_error, "ERROR: Encoding AVRO_RECORD does not match javascript object.");
+          
+        }catch(std::exception &e){
+          //TODO should send back the bad schema for user reference. 
+          OnError(ctx, on_error, e.what());
         }
       }
       break;
@@ -541,7 +575,6 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
       break;
     case avro::AVRO_BYTES:
       {
-
         if(object->IsObject()){
           Local<Object> array = object->ToObject();
           //get length of buffer
@@ -597,7 +630,7 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
       break;
     case avro::AVRO_MAP:
       {
-        if(object->IsObject()){
+        try{
           Local<Object> map = object->ToObject();
           avro::GenericMap &genMap = datum.value<avro::GenericMap>();
           const avro::NodePtr& node = genMap.schema();
@@ -614,14 +647,32 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
           genMap.value() = v;
 
           datum.value<avro::GenericMap>() = genMap;
+        }catch(std::exception &e){
+          //TODO should send back the bad schema for user reference. 
+          OnError(ctx, on_error, "Error converting avro map type.");
         }
       }
       break;       
-    //Unimplemented avro types
-    case avro::AVRO_UNION:
 
     case avro::AVRO_FIXED:
+      {
+        avro::GenericFixed &genFixed = datum.value<avro::GenericFixed>();
+        if(object->IsObject()){
+          Local<Object> array = object->ToObject();
+          //get length of buffer
+          int len = Buffer::Length(array);
+          uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(array));
+          std::vector<uint8_t> bytes;
+          bytes.insert(bytes.end(), in, in+len);
+          genFixed.value() = bytes;
+          datum.value<avro::GenericFixed>() = genFixed;
+        }else{
+          OnError(ctx, on_error, "ERROR: Encoding AVRO_FIXED does not match javascript object (must be Buffer object).");
+        }
+      }
+      break;
 
+    //Unimplemented avro types
     case avro::AVRO_ENUM:
 
     case avro::AVRO_SYMBOLIC:
@@ -630,10 +681,116 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
 
     default:
       {
+        printf("unimplemented avro type\n");
         return datum;
       }
   }
   return datum;
+}
+
+void unionBranch(GenericDatum *datum, char *type){
+  try{
+
+    int branches = datum->unionBranch();
+
+    for(int i = 0; i<branches;i++){
+      datum->selectBranch(i);
+      switch(datum->type())
+      {
+        case avro::AVRO_RECORD:
+          {
+            //Get the name of the schema.
+            avro::GenericRecord record = datum->value<avro::GenericRecord>();
+            NodePtr node = record.schema();
+            const std::string name = node->name();
+            if(strcmp(type,"record")  == 0 || strcmp(name.c_str(),type) == 0){
+              return;
+            }
+          }
+          break;
+        case avro::AVRO_STRING:
+          {
+            if(strcmp(type,"string") == 0){
+              return;
+            }
+          }
+          break;
+        case avro::AVRO_BYTES:
+          if(strcmp(type,"bytes")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_INT:
+          if(strcmp(type,"int")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_LONG:
+          if(strcmp(type,"long")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_FLOAT:
+          if(strcmp(type,"float")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_DOUBLE:
+          if(strcmp(type,"double")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_BOOL:
+          if(strcmp(type,"bool")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_NULL:
+          if(strcmp(type,"null") == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_ARRAY:
+          if(strcmp(type,"array")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_MAP:
+          if(strcmp(type,"map")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_FIXED:
+          if(strcmp(type,"fixed")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_UNION:
+          if(strcmp(type,"union")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_ENUM:
+          if(strcmp(type,"enum")  == 0){
+            return;
+          }
+          break;
+        case avro::AVRO_SYMBOLIC:
+          printf("We have a Symbolic of %s\n", type);
+          break;
+        case avro::AVRO_UNKNOWN:
+          printf("We have a Unknown of %s\n", type);
+          break;
+        default:
+          {
+            printf("unimplemented avro type\n");
+          }
+      }
+    }
+  
+  }catch(std::exception &e){
+
+  }
 }
 
 /**

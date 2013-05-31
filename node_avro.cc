@@ -329,16 +329,17 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
   datum = DecodeV8(ctx, datum, object);
 
   std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
-  avro::EncoderPtr e = avro::validatingEncoder(schema,
-         avro::binaryEncoder());
+  avro::EncoderPtr e = avro::validatingEncoder(schema, avro::binaryEncoder());
 
   e->init(*out);
+
   try{
     avro::encode(*e, datum);
   }catch(std::exception &e){
     std::string error = e.what();
     std::string errorMessage = error + *schemaString;
     OnError(ctx, on_error, errorMessage.c_str());
+    return scope.Close(Array::New());
   }
   //need to flush the bytes to the stream (aka out);
   e->flush();

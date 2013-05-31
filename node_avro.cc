@@ -696,11 +696,14 @@ void unionBranch(GenericDatum *datum, char *type){
 
     for(int i = 0; i<branches;i++){
       datum->selectBranch(i);
+
       switch(datum->type())
       {
         case avro::AVRO_RECORD:
           {
             //Get the name of the schema.
+            // tried splitting this out just to cast to GenericContainer
+            // to abstract it but got seg fault errors. 
             avro::GenericRecord record = datum->value<avro::GenericRecord>();
             NodePtr node = record.schema();
             const std::string name = node->name();
@@ -762,8 +765,13 @@ void unionBranch(GenericDatum *datum, char *type){
           }
           break;
         case avro::AVRO_FIXED:
-          if(strcmp(type,"fixed")  == 0){
-            return;
+          {
+            avro::GenericFixed record = datum->value<avro::GenericFixed>();
+            NodePtr node = record.schema();            
+            const std::string name = node->name();
+            if(strcmp(type,"fixed")  == 0 || strcmp(name.c_str(),type) == 0){
+              return;
+            }
           }
           break;
         case avro::AVRO_UNION:
@@ -772,8 +780,13 @@ void unionBranch(GenericDatum *datum, char *type){
           }
           break;
         case avro::AVRO_ENUM:
-          if(strcmp(type,"enum")  == 0){
-            return;
+          {
+            avro::GenericEnum record = datum->value<avro::GenericEnum>();
+            NodePtr node = record.schema();            
+            const std::string name = node->name();
+            if(strcmp(type,"enum")  == 0 || strcmp(name.c_str(),type) == 0){
+              return;
+            }
           }
           break;
         case avro::AVRO_SYMBOLIC:

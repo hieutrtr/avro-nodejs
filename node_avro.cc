@@ -689,6 +689,14 @@ avro::GenericDatum DecodeV8(Avro *ctx, GenericDatum datum, Local<Value> object){
   return datum;
 }
 
+/**
+ * [Takes in the pointer of a datum which is an union. It will loop through the
+ * branches checking for the type that was supplied in the JSON format (aka type). 
+ * Once a match is made The GenericDatum will be left at the current selected branch and
+ * control returned to the calling function]
+ * @param datum [pointer to the GenericDatum]
+ * @param type  [The type of Union specified by the JSON]
+ */
 void unionBranch(GenericDatum *datum, char *type){
   try{
 

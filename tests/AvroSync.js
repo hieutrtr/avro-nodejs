@@ -71,16 +71,16 @@ var complexSchema = '{\
   ]\
 }';
 
-var complexUnion = '\
-[{\
+var complexUnion = '[{\
   "name": "A",\
   "type": "record",\
   "fields": [{"name": "x", "type": ["int", "string"]}]\
-}, {\
-  "name": "B",\
-  "type": "record",\
-  "fields": [{"name": "x", "type": "string"}]\
-}]';
+  }, {\
+    "name": "B",\
+    "type": "record",\
+    "fields": [{"name": "x", "type": "string"}]\
+  }]';
+
 var union ='["string", "double"]';
 
 var map = '{"type": "map","values": "bytes"}';

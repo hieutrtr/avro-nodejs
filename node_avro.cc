@@ -53,7 +53,7 @@ static void PrintResult(uv_async_t *handle, int status) {
   // Thread safe block here 
   // ---------------------------------------------------------------------
   uv_mutex_lock(&ctx->datumLock_);
-  for(int i = 0;i < ctx->datums_.size();i++){
+  for(size_t i = 0;i < ctx->datums_.size();i++){
     datumBaton baton = ctx->datums_[i];
     //test to see if we have an error;
     if(baton.errorMessage.empty()){

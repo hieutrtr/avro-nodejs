@@ -3,6 +3,7 @@
 /**
  * converts a GenericDatum into a v8 object that can be passed back to javascript
  * @param datum [Turning the avro GenericDatum into a v8 object that we can pass back to javascript]
+ * @return returns the v8 object that can be used by javascript.
  */
 v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
   v8::Handle<v8::Object> obj = v8::Object::New();

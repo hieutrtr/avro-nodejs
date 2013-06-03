@@ -21,8 +21,6 @@ static void OnError(Avro *ctx, Persistent<Value> callback, const char* error);
 static void OnSchema(Avro *ctx, const char* schema);
 static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum);
 void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int startPos);
-//void unionBranch(GenericDatum *datum, char *type);
-//avro::GenericDatum DecodeV8(GenericDatum datum, Local<Value> object);
 
 Handle<Value> Avro::New(const Arguments& args){
     HandleScope scope;

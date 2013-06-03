@@ -31,15 +31,15 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
       {
         v8::Local<v8::Array> byteArray = v8::Array::New();
         const std::vector<uint8_t> &v = datum.value<std::vector<uint8_t> >();
-        for(int i = 0;i<v.size();i++){
+        for(size_t i = 0;i<v.size();i++){
           byteArray->Set(i, v8::Uint32::New(v[i]));
         }
         return byteArray;
       }        
     case avro::AVRO_INT:
-      return v8::Number::New(datum.value<int>());
+      return v8::Number::New(datum.value<int32_t>());
     case avro::AVRO_LONG:
-      return v8::Number::New(datum.value<long>());
+      return v8::Number::New(datum.value<int64_t>());
     case avro::AVRO_FLOAT:
       return v8::Number::New(datum.value<float>());
     case avro::AVRO_DOUBLE:
@@ -89,7 +89,7 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
         v8::Local<v8::Array> fixedBytes = v8::Array::New();
         const avro::GenericFixed &genFixed = datum.value<avro::GenericFixed>();
         const std::vector<uint8_t> &v = genFixed.value();
-        for(int i = 0;i<v.size();i++){
+        for(size_t i = 0;i<v.size();i++){
           fixedBytes->Set(i, v8::Uint32::New(v[i]));
         }
         return fixedBytes;
@@ -208,7 +208,7 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
         avro::GenericDatum mapped(node->leafAt(1));
         v8::Local<v8::Array> propertyNames = map->GetPropertyNames();
         std::vector < std::pair < std::string, avro::GenericDatum > > &v = genMap.value();;
-        for(int i = 0;i<propertyNames->Length();i++){
+        for(size_t i = 0;i<propertyNames->Length();i++){
           v8::Local<v8::String> key = propertyNames->Get(i)->ToString();
           v8::String::Utf8Value propertyName(key);
           std::pair<std::string, avro::GenericDatum> leaf(*propertyName, DecodeV8(mapped, map->Get(key)));
@@ -257,7 +257,7 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
  * @param datum [pointer to the GenericDatum]
  * @param type  [The type of Union specified by the JSON]
  */
-void unionBranch(avro::GenericDatum *datum, char *type){
+void unionBranch(avro::GenericDatum *datum, const char *type){
   try{
 
     int branches = datum->unionBranch();

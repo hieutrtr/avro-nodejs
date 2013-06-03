@@ -12,8 +12,6 @@ Persistent<String> on_schema;
 Persistent<String> on_datum;
 Persistent<String> on_error;
 
-uv_async_t async;
-
 static void PrintResult(uv_async_t *handle, int status);
 static void Process(uv_work_t* work_req);
 static void After(uv_work_t* work_req, int status);
@@ -29,13 +27,14 @@ Handle<Value> Avro::New(const Arguments& args){
     ctx->decoder_= binaryDecoder();
     std::vector<uint8_t> data;
     ctx->buffer_ = new avronode::BufferedInputStream(data, 0, 0);
+    ctx->read_  = true;
 
     ctx->Wrap(args.This());
     uv_sem_init(&ctx->sem_, 0);
     uv_mutex_init(&ctx->datumLock_);
     uv_mutex_init(&ctx->queueLock_);
 
-    uv_async_init(uv_default_loop(), &async, PrintResult);
+    uv_async_init(uv_default_loop(), &ctx->async_, PrintResult);
     //create new work_t
     uv_work_t *work_req = new uv_work_t;
     work_req->data = ctx;
@@ -69,6 +68,21 @@ static void PrintResult(uv_async_t *handle, int status) {
   uv_mutex_unlock(&ctx->datumLock_);
   // Thread safe block ends here
   // ---------------------------------------------------------------------
+}
+
+Handle<Value> Avro::Close(const Arguments &args){
+  HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+  ctx->read_ = false;
+  //while(ctx->processQueue_.size() > 0);
+  uv_mutex_lock(&ctx->queueLock_);
+
+  //push new schema to queue
+  //
+  uv_sem_post(&ctx->sem_);
+  uv_mutex_unlock(&ctx->queueLock_);
+
+  return scope.Close(Undefined());
 }
 
 /**
@@ -369,6 +383,10 @@ static void Process(uv_work_t* work_req){
 
   while(true){
     uv_sem_wait(&ctx->sem_);
+    //if we got a signal to end and we have an empty queue break;
+    if(ctx->processQueue_.size() == 0){
+      break;
+    }
     //create reader and generic datum.
     datumBaton baton = ctx->processQueue_.front();
     GenericReader reader(baton.schema, ctx->decoder_);
@@ -396,8 +414,8 @@ static void Process(uv_work_t* work_req){
     //Thread safe area leave
     // ---------------------------------------------------------------
     //Send data to returning javascript callback
-    async.data = (void*) ctx;
-    uv_async_send(&async);
+    ctx->async_.data = (void*) ctx;
+    uv_async_send(&ctx->async_);
   }
 }
 
@@ -409,6 +427,11 @@ static void Process(uv_work_t* work_req){
  */
 static void After(uv_work_t* work_req, int status){
   HandleScope scope;
+
+  Avro *ctx = static_cast<Avro*>(work_req->data);
+  //delete ctx;
+  uv_close((uv_handle_t*)&ctx->async_, NULL);
+
 }
 
 
@@ -515,6 +538,7 @@ void Avro::Initialize(Handle<Object> target){
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeDatum", Avro::DecodeDatum);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeDatum", Avro::EncodeDatum);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "close", Avro::Close);
 
 
 /*

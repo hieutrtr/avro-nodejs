@@ -37,12 +37,13 @@ public:
   std::vector<datumBaton> datums_;
   avro::DecoderPtr decoder_;
   uv_sem_t sem_;
+  uv_async_t async_;
   uv_mutex_t datumLock_;
   uv_mutex_t queueLock_;
   avronode::BufferedInputStream *buffer_;
+  bool read_;
   static void Initialize(v8::Handle<v8::Object> target);
 private: 
-
   static v8::Handle<v8::Value> New(const v8::Arguments& args);
   static v8::Handle<v8::Value> QueueSchema(const v8::Arguments &args);
   static v8::Handle<v8::Value> Push(const v8::Arguments &args);  
@@ -50,6 +51,7 @@ private:
   static v8::Handle<v8::Value> EncodeFile(const v8::Arguments &args);
   static v8::Handle<v8::Value> EncodeDatum(const v8::Arguments &args);
   static v8::Handle<v8::Value> DecodeDatum(const v8::Arguments &args);
+  static v8::Handle<v8::Value> Close(const v8::Arguments &args);
 
 };
 }

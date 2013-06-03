@@ -58,7 +58,7 @@ avro.queueSchema(jsonSchema,
     console.log(error);
   });
 
-fs.open("./data.bin", 'r', function(status, fd) {
+fs.open("data.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){
     var i=0;
     var s=stats.size;
@@ -83,7 +83,9 @@ var buf=function(fs,fd,i,s,buffer){
   }else{
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
       avro.push(b.slice(0,l));
+      avro.close();
       fs.close(fd);
     });
   }
 };
+avro.close();

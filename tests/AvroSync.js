@@ -114,4 +114,4 @@ console.log("complex result: ", complexResult);
 
 //Since avro starts another thread in the background for reading data to stop node 
 // we need to send a kill to the process.
-process.kill();
+avro.close();

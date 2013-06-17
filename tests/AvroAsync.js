@@ -1,8 +1,5 @@
 var fs = require('fs');
 var addon = require('../build/Release/avro');
-var WebSocketClient = require('websocket').client;
-
-var client = new WebSocketClient();
 
 var Buffer = require('buffer').Buffer;
 

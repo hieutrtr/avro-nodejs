@@ -115,7 +115,8 @@ you would update the lines to the following:
 If you don't already have them installed, there are several npm packages that are required to
 build, install and use the library.
 
-The library itself requires the WebSocket-Node package (https://github.com/Worlize/WebSocket-Node),
+The library its self does not require websockets but it is recommended for the async use case using
+a websocket implementation (https://github.com/Worlize/WebSocket-Node),
 which can be installed via npm by running the following from the root folder of your avro-nodejs
 folder:
 

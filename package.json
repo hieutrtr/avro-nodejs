@@ -6,6 +6,8 @@
     "email": "benjamindmetzger@gmail.com"
   },
 
+  "main": "./build/Release/avro",
+
   "repository" :
   { "type" : "git"
   , "url" : "https://github.com/GenslerAppsPod/avro-nodejs.git"

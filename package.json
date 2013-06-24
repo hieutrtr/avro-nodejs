@@ -1,10 +1,16 @@
 {
-  "name": "AvroNode",
+  "name": "avronode",
   "version": "0.0.2",
   "author": {
     "name": "Benjamin Metzger",
     "email": "benjamindmetzger@gmail.com"
   },
+
+  "repository" :
+  { "type" : "git"
+  , "url" : "https://github.com/GenslerAppsPod/avro-nodejs.git"
+  },
+
 
   "dependencies": {
     "ws": "*"

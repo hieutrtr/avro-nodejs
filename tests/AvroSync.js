@@ -83,6 +83,23 @@ var complexUnion = '[{\
 
 var union ='["string", "double"]';
 
+var handshakeResponse = '{\
+    "type": "record",\
+    "name": "handshakeResponse",\
+    "namespace": "com.gensler.scalavro.protocol",\
+    "fields": [\
+      {"name": "match",\
+       "type": {"type": "enum", "name": "HandshakeMatch",\
+                "symbols": ["BOTH", "CLIENT", "NONE"]}},\
+      {"name": "serverProtocol",\
+       "type": ["null", "string"]},\
+      {"name": "serverHash",\
+       "type": ["null", {"type": "fixed", "name": "MD5", "size": 16}]},\
+      {"name": "meta",\
+       "type": ["null", {"type": "map", "values": "bytes"}]}\
+    ]\
+  }';
+
 var map = '{"type": "map","values": "bytes"}';
 // Some of the types supported
 // TODO finish off examples.
@@ -95,6 +112,15 @@ var fixedResult = avro.decodeDatum(fixedExample, new Buffer(
   })
 ));
 
+var handshakeResponseResult = avro.decodeDatum(handshakeResponse, new Buffer(
+  avro.encodeDatum(handshakeResponse, {
+    match: "CLIENT",
+    serverProtocol: null,
+    serverHash: null,
+    meta: null    
+  })
+));
+
 var complexUnionResult = avro.decodeDatum(complexUnion, new Buffer(avro.encodeDatum(complexUnion, { "A": {"x": {string: "a String"}}})));
 var unionResult = avro.decodeDatum(union, new Buffer(avro.encodeDatum(union, { string: "we have a string"})));
 var mapResult = avro.decodeDatum(map, new Buffer(avro.encodeDatum(map, {sequence: new Buffer(avro.encodeDatum('"long"', 12345))})));
@@ -103,6 +129,7 @@ var stringResult = avro.decodeDatum('"string"', new Buffer(avro.encodeDatum('"st
 var complexResult = avro.decodeDatum(complexSchema, new Buffer(avro.encodeDatum(complexSchema, { id: { bytes: new Buffer([8,-85,-51,18,52]) }})));
 var longResult = avro.decodeDatum('"long"', new Buffer(avro.encodeDatum('"long"', 12345)));
 
+console.log("handshake result: ", handshakeResponseResult);
 console.log("complex union result: ",complexUnionResult);
 console.log("fixed result: ", fixedResult);
 console.log("union result: ", unionResult);

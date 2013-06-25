@@ -81,8 +81,6 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
         }
         return datumArray;
       }
-    //Unimplemented avro types
-    case avro::AVRO_UNION:
 
     case avro::AVRO_FIXED:
       {
@@ -95,9 +93,19 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
         }
         return fixedBytes;
       }
+    case avro::AVRO_ENUM:
+      {
+        const avro::GenericEnum &genEnum = datum.value<avro::GenericEnum>();
+        int32_t enumVal = genEnum.value();
+        return v8::Number::New(enumVal);
+      }
+
+    //Unimplemented avro types
     case avro::AVRO_SYMBOLIC:
 
     case avro::AVRO_UNKNOWN:
+
+    case avro::AVRO_UNION:
 
     default:
       {
@@ -219,7 +227,19 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
 
         datum.value<avro::GenericMap>() = genMap;
       }
-      break;       
+      break;     
+    case avro::AVRO_ENUM:  
+      {
+        avro::GenericEnum &genEnum = datum.value<avro::GenericEnum>();
+        if(object->IsString()){
+          v8::String::Utf8Value avroString(object->ToString());
+          genEnum.set(*avroString);
+        }else{
+          genEnum.set(object->Int32Value());
+        }
+        datum.value<avro::GenericEnum>() = genEnum;
+      }
+      break;
 
     case avro::AVRO_FIXED:
       {
@@ -235,7 +255,6 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
       }
       break;
     //Unimplemented avro types
-    case avro::AVRO_ENUM:
 
     case avro::AVRO_SYMBOLIC:
 

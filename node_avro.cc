@@ -323,62 +323,60 @@ Handle<Value> Avro::EncodeFile(const Arguments &args) {
  */
 Handle<Value> Avro::EncodeDatum(const Arguments &args){
   HandleScope scope;
-
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
 
   if(args.Length()< 2){
     OnError(ctx, on_error, "EncodeDatum requires two params");
-    return scope.Close(Undefined());
+    return scope.Close(Array::New());
   }
 
   if(!args[0]->IsString()){
     OnError(ctx, on_error, "schema must be a string");
-    return scope.Close(Undefined());
+    return scope.Close(Array::New());
   }
-  //grab string from input.
+
+  Local<Array> byteArray = Array::New();
   v8::String::Utf8Value schemaString(args[0]->ToString());
-  std::istringstream is(*schemaString);
-  //create schema
-  //
-  ValidSchema schema;
-  try{
-    compileJsonSchema(is, schema);
-  }catch(std::exception &e){
-    //TODO should send back the bad schema for user reference. 
-    OnError(ctx, on_error, "Error: compiling schema for EncodeDatum");
-    return scope.Close(Undefined());
-  }
-
   Local<Value> object = args[1];
-  avro::GenericDatum datum(schema);
-  datum = DecodeV8(datum, object);
-
-  std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
-  avro::EncoderPtr e = avro::validatingEncoder(schema, avro::binaryEncoder());
-
-  e->init(*out);
+  ValidSchema schema;
 
   try{
+    //grab string from input.
+
+    std::istringstream is(*schemaString);
+    //create schema
+    //
+    compileJsonSchema(is, schema);
+
+    avro::GenericDatum datum(schema);
+    datum = DecodeV8(datum, object);
+
+    std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
+    avro::EncoderPtr e = avro::validatingEncoder(schema, avro::binaryEncoder());
+
+    e->init(*out);
+
     avro::encode(*e, datum);
+
+    //need to flush the bytes to the stream (aka out);
+    e->flush();
+
+    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
+
+    avro::StreamReader reader(*in);
+    int i = 0;
+    // could initialize a buffer and then do a while read of x chunk say 4k
+    while(reader.hasMore()){
+      byteArray->Set(i, Uint32::New(reader.read()));
+      i++;
+    }
   }catch(std::exception &e){
     std::string error = e.what();
-    std::string errorMessage = error + *schemaString;
+    std::string errorMessage = error + *schemaString + "\n";
     OnError(ctx, on_error, errorMessage.c_str());
     return scope.Close(Array::New());
   }
-  //need to flush the bytes to the stream (aka out);
-  e->flush();
 
-  std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
-
-  avro::StreamReader reader(*in);
-  int i = 0;
-  // could initialize a buffer and then do a while read of x chunk say 4k
-  Local<Array> byteArray = Array::New();
-  while(reader.hasMore()){
-    byteArray->Set(i, Uint32::New(reader.read()));
-    i++;
-  }
   //construct a byte array to send back to the javascript
 
   return scope.Close(byteArray);
@@ -490,13 +488,19 @@ void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int st
 static void OnError(Avro *ctx, Persistent<Value> callback, const char* error){
 
   Local<Value> args[1] = { String::New(error) };
-
   if(callback->IsFunction()){
     MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 1, args);
     //make sure to remove the callback. Actually don't do that here. 
     //callback.Dispose();
   }else if(callback->IsString()){
-    MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
+    Local<Value> callback_v = ctx->handle_->Get(callback);
+    //if there is no error callback defined we'll just throw an exception;
+    if(callback_v->IsFunction()){
+      MakeCallback(ctx->handle_, Local<Function>::Cast(callback_v), 1, args);
+    }else{
+      v8::ThrowException(v8::String::New(error));
+    }
+
   }else{
     printf("error wtf\n"); 
   }

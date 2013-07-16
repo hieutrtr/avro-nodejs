@@ -24,10 +24,12 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
         return obj;
       }
     case avro::AVRO_STRING:
-      return  v8::String::New(
-        datum.value<std::string>().c_str(),
-        datum.value<std::string>().size()
-      );
+      {
+        return  v8::String::New(
+          datum.value<std::string>().c_str(),
+          datum.value<std::string>().size()
+        );
+      } 
     case avro::AVRO_BYTES:
       {
         v8::Local<v8::Array> byteArray = v8::Array::New();

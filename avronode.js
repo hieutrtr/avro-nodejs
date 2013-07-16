@@ -1,1 +1,1 @@
-export.avronode = require('build/Release/avro');
+exports.avronode = require('build/Release/obj.target/avro');

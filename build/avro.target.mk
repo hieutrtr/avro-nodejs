@@ -29,10 +29,11 @@ CFLAGS_CC_Debug := \
 	-fexceptions
 
 INCS_Debug := \
-	-I/home/19567/.node-gyp/0.10.7/src \
-	-I/home/19567/.node-gyp/0.10.7/deps/uv/include \
-	-I/home/19567/.node-gyp/0.10.7/deps/v8/include \
-	-I/home/19567/Workspace/avro-nodejs/avrocpp/include
+	-I/home/19567/.node-gyp/0.10.12/src \
+	-I/home/19567/.node-gyp/0.10.12/deps/uv/include \
+	-I/home/19567/.node-gyp/0.10.12/deps/v8/include \
+	-I/home/19567/Workspace/avro-nodejs/avrocpp/include \
+	-I$(srcdir)/.
 
 DEFS_Release := \
 	'-D_LARGEFILE_SOURCE' \
@@ -49,7 +50,8 @@ CFLAGS_Release := \
 	-m64 \
 	-O2 \
 	-fno-strict-aliasing \
-	-fno-tree-vrp
+	-fno-tree-vrp \
+	-fno-tree-sink
 
 # Flags passed to only C files.
 CFLAGS_C_Release :=
@@ -60,13 +62,15 @@ CFLAGS_CC_Release := \
 	-fexceptions
 
 INCS_Release := \
-	-I/home/19567/.node-gyp/0.10.7/src \
-	-I/home/19567/.node-gyp/0.10.7/deps/uv/include \
-	-I/home/19567/.node-gyp/0.10.7/deps/v8/include \
-	-I/home/19567/Workspace/avro-nodejs/avrocpp/include
+	-I/home/19567/.node-gyp/0.10.12/src \
+	-I/home/19567/.node-gyp/0.10.12/deps/uv/include \
+	-I/home/19567/.node-gyp/0.10.12/deps/v8/include \
+	-I/home/19567/Workspace/avro-nodejs/avrocpp/include \
+	-I$(srcdir)/.
 
 OBJS := \
 	$(obj).target/$(TARGET)/node_avro.o \
+	$(obj).target/$(TARGET)/DynamicBuffer.o \
 	$(obj).target/$(TARGET)/BufferedInputStream.o \
 	$(obj).target/$(TARGET)/translate.o
 

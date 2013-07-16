@@ -79,7 +79,13 @@ var buf=function(fs,fd,i,s,buffer){
     });
   }else{
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
-      avro.push(b.slice(0,l));
+      var section = b.slice(0,l);
+      var result = "";
+      for(var i = 0;i<section.length;i++){
+        result += section[i] + " ";
+      }
+      console.log(result);
+      avro.push(section);
       avro.close();
       fs.close(fd);
     });

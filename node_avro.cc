@@ -62,6 +62,7 @@ static void PrintResult(uv_async_t *handle, int status) {
   // Thread safe block here 
   // ---------------------------------------------------------------------
   uv_mutex_lock(&ctx->datumLock_);
+
   for(size_t i = 0;i < ctx->datums_.size();i++){
     datumBaton baton = ctx->datums_[i];
     //test to see if we have an error;
@@ -104,7 +105,7 @@ Handle<Value> Avro::Close(const Arguments &args){
 Handle<Value> Avro::QueueSchema(const Arguments &args){
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
-
+  ValidSchema schema;
   datumBaton baton;
 
   if(!args[0]->IsString()){
@@ -114,34 +115,31 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
   //grab string from input.
   v8::String::Utf8Value schemaString(args[0]->ToString());
   std::istringstream is(*schemaString);
-  //create schema
-  //
-  ValidSchema schema;
+
   try{
     compileJsonSchema(is, schema);
+
+    baton.schema = schema;
+
+    // if args > 2 and args[1] is a function set our onSuccess  
+    handleCallbacks(ctx, &baton, args, 1);
+
+    // ------------------------------------------------
+    // lock section here adding to queue
+    uv_mutex_lock(&ctx->queueLock_);
+
+    //push new schema to queue
+    ctx->processQueue_.push(baton);
+    uv_sem_post(&ctx->sem_);
+    uv_mutex_unlock(&ctx->queueLock_);
+    // ------------------------------------------------
+    // release lock 
+    // 
   }catch(std::exception &e){
     //TODO should send back the bad schema for user reference. 
     OnError(ctx, on_error, e.what());
     return scope.Close(Undefined());
   }
-
-  baton.schema = schema;
-
-  // if args > 2 and args[1] is a function set our onSuccess  
-  handleCallbacks(ctx, &baton, args, 1);
-
-  // ------------------------------------------------
-  // lock section here adding to queue
-  uv_mutex_lock(&ctx->queueLock_);
-
-  //push new schema to queue
-  ctx->processQueue_.push(baton);
-  uv_sem_post(&ctx->sem_);
-  uv_mutex_unlock(&ctx->queueLock_);
-  // ------------------------------------------------
-  // release lock 
-  // 
-
   return scope.Close(Undefined());
 }
 
@@ -158,28 +156,33 @@ Handle<Value> Avro::Push(const Arguments &args){
     OnError(ctx, on_error, "Wrong number of arguments");
     return scope.Close(Undefined());
   }
+  try{
+    if(args[0]->IsObject()){
+      Local<Object> in_buf = args[0]->ToObject();
+      //get length of buffer
+      int len = Buffer::Length(in_buf);
+      //get data of the buffer
+      uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
 
-  if(args[0]->IsObject()){
-    Local<Object> in_buf = args[0]->ToObject();
+      // ------------------------------------------------
+      // lock section here adding to BufferedInputStream.
+      //uv_mutex_lock(&ctx->datumLock_);
 
-    //get length of buffer
-    int len = Buffer::Length(in_buf);
-    //get data of the buffer
-    uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
+      ctx->buffer_->append(in,len);
 
+      //uv_mutex_unlock(&ctx->datumLock_); 
+      // release lock section here.      
+      // ------------------------------------------------
+    }else{
+      OnError(ctx, on_error, "Argument must be a Byte Array");
+    }
 
-    // ------------------------------------------------
-    // lock section here adding to BufferedInputStream.
-    uv_mutex_lock(&ctx->datumLock_);
-
-    ctx->buffer_->append(in,len);
-
-    uv_mutex_unlock(&ctx->datumLock_); 
-    // release lock section here.      
-    // ------------------------------------------------
-  }else{
-    OnError(ctx, on_error, "Argument must be a Byte Array");
+  }catch(std::exception &e){
+    //TODO should send back the bad schema for user reference. 
+    OnError(ctx, on_error, e.what());
+    return scope.Close(Undefined());
   }
+
 
   return scope.Close(Undefined());
 }
@@ -210,7 +213,6 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
       avro::DataFileReader<avro::GenericDatum> dfr(*filename);
       ValidSchema schema = dfr.dataSchema();
       std::ostringstream oss(std::ios_base::out);
-      schema.toJson(oss);
       avro::GenericDatum datum(dfr.dataSchema());
 
       while(dfr.read(datum)){
@@ -397,35 +399,41 @@ static void Process(uv_work_t* work_req){
     if(ctx->processQueue_.size() == 0){
       break;
     }
-    //create reader and generic datum.
     datumBaton baton = ctx->processQueue_.front();
-    GenericReader reader(baton.schema, ctx->decoder_);
-    GenericDatum *datum = new GenericDatum(baton.schema);
-    //disgard the top schema
-    
-    // Thread safe area here
-    // ---------------------------------------------------------------
-    uv_mutex_lock(&ctx->queueLock_);
-    ctx->processQueue_.pop();
-    uv_mutex_unlock(&ctx->queueLock_);
-    // ---------------------------------------------------------------
-    //Thread safe area leave
-    
-    //This is a blocking read
-    reader.read(*datum);
-    baton.datum = *datum;
-    // Thread safe area here
-    // ---------------------------------------------------------------
-    // mutex lock for writing to datum on avro object. 
-    uv_mutex_lock(&ctx->datumLock_);
-    ctx->datums_.push_back(baton);
+    try{
+      //create reader and generic datum.
+      GenericReader reader(baton.schema, ctx->decoder_);
+      GenericDatum *datum = new GenericDatum(baton.schema);
+      //disgard the top schema
+      // Thread safe area here
+      // ---------------------------------------------------------------
+      uv_mutex_lock(&ctx->queueLock_);
+      ctx->processQueue_.pop();
+      uv_mutex_unlock(&ctx->queueLock_);
+      // ---------------------------------------------------------------
+      //Thread safe area leave
+      //This is a blocking read
+      reader.read(*datum);
+      baton.datum = *datum;
+      // Thread safe area here
+      // ---------------------------------------------------------------
+      // mutex lock for writing to datum on avro object. 
+      // 
+      uv_mutex_lock(&ctx->datumLock_);
 
-    uv_mutex_unlock(&ctx->datumLock_);
-    //Thread safe area leave
-    // ---------------------------------------------------------------
-    //Send data to returning javascript callback
-    ctx->async_.data = (void*) ctx;
-    uv_async_send(&ctx->async_);
+      ctx->datums_.push_back(baton);
+
+      uv_mutex_unlock(&ctx->datumLock_);
+      //Thread safe area leave
+      // ---------------------------------------------------------------
+      //Send data to returning javascript callback
+      ctx->async_.data = (void*) ctx;
+      uv_async_send(&ctx->async_);
+    }catch(std::exception &e){
+      printf("we got an error in the process\n");
+      OnError(ctx, baton.onError, e.what());
+    }
+
   }
 }
 

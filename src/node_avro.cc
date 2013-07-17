@@ -147,7 +147,7 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
 /**
  * Gets the number of schemas that are queued.  
  */
- Handle<Value> Avro::PendingSchema(const Arguments &args){
+ Handle<Value> Avro::PendingSchemas(const Arguments &args){
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
 
@@ -587,7 +587,9 @@ void Avro::Initialize(Handle<Object> target){
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeFile", Avro::EncodeFile);
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "bufferLength", Avro::BufferLength);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "queueSchema", Avro::QueueSchema);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "pendingSchemas", Avro::PendingSchemas);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeDatum", Avro::DecodeDatum);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeDatum", Avro::EncodeDatum);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "close", Avro::Close);

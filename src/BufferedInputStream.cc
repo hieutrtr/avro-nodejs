@@ -41,7 +41,7 @@ bool BufferedInputStream::next(const uint8_t** data, size_t* len) {
  * 
  */
 long BufferedInputStream::size(){
-  return 0;
+  return data_.totalLength;
 }
 
 /**

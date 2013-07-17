@@ -11,7 +11,7 @@
         'ldflags': ['-L/home/19567/Workspace/avro-nodejs/avrocpp/lib'],
         'libraries': ['/home/19567/Workspace/avro-nodejs/avrocpp/lib/libavrocpp.so']
       },
-      "sources": [ "node_avro.cc","DynamicBuffer.cc", "BufferedInputStream.cc", "translate.cc"]
+      "sources": [ "./src/node_avro.cc","./src/DynamicBuffer.cc", "./src/BufferedInputStream.cc", "./src/translate.cc"]
     }
   ]
 }

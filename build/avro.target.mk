@@ -69,10 +69,10 @@ INCS_Release := \
 	-I$(srcdir)/.
 
 OBJS := \
-	$(obj).target/$(TARGET)/node_avro.o \
-	$(obj).target/$(TARGET)/DynamicBuffer.o \
-	$(obj).target/$(TARGET)/BufferedInputStream.o \
-	$(obj).target/$(TARGET)/translate.o
+	$(obj).target/$(TARGET)/src/node_avro.o \
+	$(obj).target/$(TARGET)/src/DynamicBuffer.o \
+	$(obj).target/$(TARGET)/src/BufferedInputStream.o \
+	$(obj).target/$(TARGET)/src/translate.o
 
 # Add to the list of files we specially track dependencies for.
 all_deps += $(OBJS)

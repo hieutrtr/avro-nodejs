@@ -143,6 +143,17 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
   return scope.Close(Undefined());
 }
 
+
+/**
+ * Gets the number of schemas that are queued.  
+ */
+ Handle<Value> Avro::PendingSchema(const Arguments &args){
+  HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+  return scope.Close(Number::New(ctx->processQueue_.size()));
+ }
+
 /**
  * Sending bytes to the decode async thread loop.
  * @param bytes [A Buffer containing a series of bytes.]
@@ -185,6 +196,18 @@ Handle<Value> Avro::Push(const Arguments &args){
 
 
   return scope.Close(Undefined());
+}
+
+
+/**
+ * Gets the size of the underlining Buffer.
+ */
+Handle<Value> Avro::BufferLength(const Arguments &args){
+  HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+  return scope.Close(Number::New(ctx->buffer_->size()));
+   
 }
 
 /**

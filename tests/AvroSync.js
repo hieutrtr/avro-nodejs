@@ -120,6 +120,14 @@ var handshakeResponseResult = avro.decodeDatum(handshakeResponse, new Buffer(
     meta: null    
   })
 ));
+/*
+for(var i = 0;i<100;i++){
+  var avroLoop = new addon.Avro();
+  var complexUnionResult = avroLoop.decodeDatum(complexUnion, new Buffer(avroLoop.encodeDatum(complexUnion, { "A": {"x": {string: "a String"}}})));
+  console.log("complex union result: ",complexUnionResult);
+  avroLoop.close();
+}
+*/
 
 var complexUnionResult = avro.decodeDatum(complexUnion, new Buffer(avro.encodeDatum(complexUnion, { "A": {"x": {string: "a String"}}})));
 var unionResult = avro.decodeDatum(union, new Buffer(avro.encodeDatum(union, { string: "we have a string"})));
@@ -142,3 +150,4 @@ console.log("complex result: ", complexResult);
 //Since avro starts another thread in the background for reading data to stop node 
 // we need to send a kill to the process.
 avro.close();
+console.log("end of file");

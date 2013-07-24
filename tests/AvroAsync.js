@@ -11,6 +11,7 @@ avro.onerror = function(error){
 
 avro.ondatum = function(datum){
   console.log("onDatum",datum);
+  avro.close();
 };
 
 var jsonSchema = '{\
@@ -47,13 +48,8 @@ var jsonSchema = '{\
     }\
   ]}';
 
-avro.queueSchema(jsonSchema,
-  function(datum){
-    console.log(datum);
-  },
-  function(error){
-    console.log(error);
-  });
+avro.queueSchema(jsonSchema);
+
 
 fs.open("data.bin", 'r', function(status, fd) {
   fs.fstat(fd,function(err, stats){
@@ -71,7 +67,6 @@ var buf=function(fs,fd,i,s,buffer){
   if(i+buffer.length<s){
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
       avro.push(b.slice(0,l));
-
       i=i+buffer.length;
       setTimeout(function(){
         buf(fs,fd,i,s,buffer);
@@ -81,9 +76,7 @@ var buf=function(fs,fd,i,s,buffer){
     fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
       var section = b.slice(0,l);
       avro.push(section);
-      avro.close();
       fs.close(fd);
     });
   }
 };
-avro.close();

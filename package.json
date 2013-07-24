@@ -24,10 +24,10 @@
   "bugs": {
     "url": "https://github.com/GenslerAppsPod/avro-nodejs/issues"
   },
-  "_id": "avronode@0.0.31",
+  "_id": "avronode@0.0.35",
   "dist": {
-    "shasum": "2d74e9d593270f42c6bb0b38e5347a3a21f1c3a4"
+    "shasum": "61e867ae2a9641406805f6e80e46ac94ca1c5ee9"
   },
-  "_from": "avronode@v0.0.31",
-  "_resolved": "https://registry.npmjs.org/avronode/-/avronode-0.0.31.tgz"
+  "_from": "avronode@0.0.35",
+  "_resolved": "https://registry.npmjs.org/avronode/-/avronode-0.0.35.tgz"
 }

@@ -23,11 +23,12 @@ class BufferedInputStream : public avro::InputStream
   pthread_cond_t cond;
   uv_sem_t sem_;
   size_t cur_;
+  bool read_;
 
 public:
   BufferedInputStream(std::vector<uint8_t> b,
     size_t chunkSize, size_t available) :
-    data_(), chunkSize_(chunkSize),hasData_(false),
+    data_(), chunkSize_(chunkSize),hasData_(false), read_(true),
     available_(available), cur_(0) {
       pthread_mutex_init(&lock, NULL);
       pthread_cond_init (&cond, NULL);
@@ -40,6 +41,8 @@ public:
   void append(uint8_t* in, int len);
 
   void skip(size_t len);
+
+  void close();
 
   long size();
 

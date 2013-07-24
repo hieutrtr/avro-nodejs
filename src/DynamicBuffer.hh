@@ -21,12 +21,13 @@ class DynamicBuffer {
            uint8_t **pOutput,
            long int offset,
            long int arrayLength);
+    long int readBlock(uint8_t **pOutput);
     void freeFirstBlock();
     long int totalLength;
     BufferBlock *pFirstBlock;
     short int startPoint;
     BufferBlock *pLastBlock;
-    pthread_mutex_t lock;
+    int numBlocks;
 };
 
 }

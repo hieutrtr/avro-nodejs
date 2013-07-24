@@ -48,7 +48,10 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
     case avro::AVRO_DOUBLE:
       return v8::Number::New(datum.value<double>());
     case avro::AVRO_BOOL:
-      return v8::Boolean::New(datum.value<bool>());
+    {
+      v8::Handle<v8::Boolean> boolVal = v8::Boolean::New(datum.value<bool>());
+      return boolVal;
+    }
     case avro::AVRO_NULL:
       return v8::Null();
     case avro::AVRO_ARRAY:

@@ -1,4 +1,5 @@
 #include "DynamicBuffer.hh"
+#include <cstring>
 namespace avronode {
 
   /**
@@ -8,9 +9,10 @@ namespace avronode {
   DynamicBuffer::DynamicBuffer() {
     totalLength = 0;
     startPoint = 0;
-    pFirstBlock = NULL;
+    numBlocks = 0;
+    pFirstBlock = (BufferBlock*) malloc(sizeof(BufferBlock));
+    pFirstBlock->data = (uint8_t*)malloc(sizeof(uint8_t)*1);
     pLastBlock = pFirstBlock;
-    pthread_mutex_init(&lock, NULL);
   }
   /**
    * [freeBuffer description]
@@ -21,7 +23,8 @@ namespace avronode {
     BufferBlock *block = pFirstBlock;
     while (block) {
       pFirstBlock = block->pNextBlock;
-      free(block);
+      //free(block);
+      //free(block->data);
       block = pFirstBlock;
     }
     //free(pBuffer);
@@ -39,12 +42,12 @@ namespace avronode {
   long int DynamicBuffer::appendData(uint8_t *pInput, long int offset,    
                long int dataLength) {
     //there is more input data
-    pthread_mutex_lock( &lock);
     BufferBlock *block = (BufferBlock*) malloc(sizeof(BufferBlock));
-    
-    block->data = pInput;
+    block->data = (uint8_t*)malloc(sizeof(uint8_t)*dataLength); 
+    memcpy(block->data, pInput, dataLength);
     block->size = dataLength;
     block->pNextBlock = NULL;
+    numBlocks++;
 
     if(pFirstBlock == NULL){
       pFirstBlock = block;
@@ -54,7 +57,6 @@ namespace avronode {
       pLastBlock = block;
     }
     totalLength += dataLength;
-    pthread_mutex_unlock( &lock);
 
     
     return totalLength;
@@ -69,33 +71,57 @@ namespace avronode {
   long int DynamicBuffer::readData(uint8_t **pOutput,
              long int offset,
              long int arrayLength) {
-    pthread_mutex_lock( &lock);
     // while there is something more to read and there is room for output
     BufferBlock *block = pFirstBlock;
     
     uint8_t *byte = '\0';
    
-    if( block) {
+    if(block) {
 
       byte = &(block->data[startPoint++]);
       totalLength--;
+
       //read from the first memory block;
       // if the first memory block is empty
       (pOutput[offset++]) = byte;
       if (block->size == startPoint) {
+        printf("Block num: %d\n", numBlocks);
         //delete the first memory data[startPoint]block from the linked list and free its memory;
         pFirstBlock = block->pNextBlock;
+        realloc(block->data, block->size * sizeof(uint8_t));
         free(block);
-        block = pFirstBlock;    
         startPoint = 0;
-        pthread_mutex_unlock( &lock);
-
+        numBlocks--;
         return startPoint;
       }
     }
-    pthread_mutex_unlock( &lock);
 
     return startPoint;
+  }
+
+  /**
+   * [DynamicBuffer::readBlock description]
+   * @param  pOutput [description]
+   * @return         [description]
+   */
+  long int DynamicBuffer::readBlock(uint8_t **pOutput){
+    BufferBlock *block = pFirstBlock->pNextBlock;
+
+    free(pFirstBlock->data);
+    free(pFirstBlock);
+    int blockSize = 0;
+
+    if(block){
+      blockSize = block->size;
+      //printf("Block num: %d\n", numBlocks);
+      *pOutput = block->data;
+      totalLength -= blockSize;
+
+      pFirstBlock = block;
+      //free(block->data);
+      numBlocks--;
+    }
+    return blockSize;
   }
 
   /**

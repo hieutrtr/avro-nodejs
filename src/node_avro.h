@@ -21,8 +21,8 @@ using namespace node;
 
 struct datumBaton {
   avro::ValidSchema schema;
-  avro::GenericDatum datum;
-  std::string errorMessage;
+  avro::GenericDatum *datum;
+  const char* errorMessage;
   v8::Persistent<v8::Value> onSuccess;
   v8::Persistent<v8::Value> onError;
 };
@@ -37,6 +37,7 @@ public:
   std::vector<datumBaton> datums_;
   avro::DecoderPtr decoder_;
   uv_sem_t sem_;
+  uv_loop_t *avro_loop_;
   uv_async_t async_;
   uv_mutex_t datumLock_;
   uv_mutex_t queueLock_;

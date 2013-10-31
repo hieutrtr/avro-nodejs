@@ -30,11 +30,11 @@ Handle<Value> Avro::New(const Arguments& args){
     HandleScope scope;
 
     Avro *ctx = new Avro();
-    ctx->decoder_= binaryDecoder();
+    ctx->decoder_ = binaryDecoder();
     std::vector<uint8_t> data;
     ctx->buffer_ = new avronode::BufferedInputStream(data, 0, 0);
     ctx->read_  = true;
-    ctx->avro_loop_ = uv_default_loop();
+    ctx->avro_loop_ = uv_loop_new();
     ctx->Wrap(args.This());
     uv_sem_init(&ctx->sem_, 0);
     uv_mutex_init(&ctx->datumLock_);
@@ -100,7 +100,7 @@ Handle<Value> Avro::Close(const Arguments &args){
   ctx->buffer_->close();
 
   //set the smart pointer to 0 so that it can be cleaned up.
-  ctx->decoder_.reset();
+  //ctx->decoder_.reset();
   uv_sem_post(&ctx->sem_);
   uv_mutex_unlock(&ctx->queueLock_);
   
@@ -597,7 +597,11 @@ static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum) 
     if(callback->IsFunction()){
       MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 0, args);
     }else if(callback->IsString()){
-      MakeCallback(ctx->handle_,  Persistent<String>::Cast(callback), 0, args);
+      Local<Value> callback_v = ctx->handle_->Get(callback);
+      ////if there is no error callback defined we'll just throw an exception;
+      if(callback_v->IsFunction()){
+        MakeCallback(ctx->handle_, Local<Function>::Cast(callback_v), 0, args);
+      }
     }else{
       printf("close wtf\n");
     }

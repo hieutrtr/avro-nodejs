@@ -52,6 +52,26 @@ var fixedExample = '{\
   }]\
 }';
 
+// Schema of Person
+var personExample = '{\
+  "type": "array",\
+  "items": [{\
+    "name": "com.gensler.scalavro.util.BenTest.Person",\
+    "type": "record",\
+    "fields": [{\
+      "name": "name",\
+      "type":"string"\
+    }]},\
+    {\
+      "name": "com.gensler.scalavro.Reference",\
+      "type": "record",\
+      "fields": [{\
+        "name": "id",\
+        "type": "long"\
+      }]\
+    }\
+  ]}';
+
 
 var complexSchema = '{\
   "name": "GetOrganization",\
@@ -178,6 +198,66 @@ describe("Testing the sync encoding and decoding types", function(){
     ));
 
     expect({match: 1, serverProtocol: null, serverHash: null, meta: null}).toEqual(handshakeResponseResult);
+  });
+
+
+  it("should support scalavro reference type", function(){
+    var referenceScalavroType = avro.decodeDatum(personExample,
+      new Buffer([
+        20, 
+        0, 
+        6, 
+        66, 
+        101, 
+        110, 
+        0, 
+        12, 
+        67, 
+        111, 
+        110, 
+        110, 
+        111, 
+        114, 
+        0, 
+        10, 
+        78, 
+        105, 
+        97, 
+        108, 
+        108, 
+        2, 
+        0, 
+        0, 
+        8, 
+        66, 
+        114, 
+        97, 
+        100, 
+        2, 
+        4, 
+        2, 
+        6, 
+        2, 
+        4, 
+        2, 
+        2, 
+        2, 
+        0, 
+        0 
+        ])
+      );
+    expect([
+      { name: 'Ben' },
+      { name: 'Connor' },
+      { name: 'Niall' },
+      { name: 'Ben' },
+      { name: 'Brad' },
+      { name: 'Niall' },
+      { name: 'Ben' },
+      { name: 'Niall' },
+      { name: 'Connor' },
+      { name: 'Ben' } ]).toEqual(referenceScalavroType);
+
   });
 
   avro.close();

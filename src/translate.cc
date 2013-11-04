@@ -1,11 +1,16 @@
 #include "translate.h"
 
+
+v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
+  DecodeAvro(datum, v8::Array::New());
+}
+
 /**
  * converts a GenericDatum into a v8 object that can be passed back to javascript
  * @param datum [Turning the avro GenericDatum into a v8 object that we can pass back to javascript]
  * @return returns the v8 object that can be used by javascript.
  */
-v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
+v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum,  v8::Local<v8::Array> reference){
   v8::Handle<v8::Object> obj = v8::Object::New();
   //return this Object
   switch(datum.type())
@@ -16,10 +21,14 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
         const avro::NodePtr& node = record.schema();
         v8::Handle<v8::Object> obj = v8::Object::New();
         for(uint i = 0; i<record.fieldCount(); i++){
-          //Add values
           v8::Local<v8::String> datumName = v8::String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
+
           const avro::GenericDatum& subDatum = record.fieldAt(i);
-          obj->Set(datumName, DecodeAvro(subDatum));
+          if(!strcmp("com.gensler.scalavro.Reference", node->name().fullname().c_str())){
+            return reference->Get(DecodeAvro(subDatum)->Int32Value());
+          }else {
+            obj->Set(datumName, DecodeAvro(subDatum));
+          }
         }
         return obj;
       }
@@ -63,7 +72,7 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum){
         int i = 0;
         for(std::vector<avro::GenericDatum>::const_iterator it = v.begin(); it != v.end(); ++it) {
           const avro::GenericDatum &itDatum = * it;
-          datumArray->Set(i, DecodeAvro(itDatum));
+          datumArray->Set(i, DecodeAvro(itDatum, datumArray));
           i++;
         }
         return datumArray;

@@ -202,48 +202,13 @@ describe("Testing the sync encoding and decoding types", function(){
 
 
   it("should support scalavro reference type", function(){
+    //This is the a byte stream representing what a reference would 
+    //look like for the personExample schema
     var referenceScalavroType = avro.decodeDatum(personExample,
       new Buffer([
-        20, 
-        0, 
-        6, 
-        66, 
-        101, 
-        110, 
-        0, 
-        12, 
-        67, 
-        111, 
-        110, 
-        110, 
-        111, 
-        114, 
-        0, 
-        10, 
-        78, 
-        105, 
-        97, 
-        108, 
-        108, 
-        2, 
-        0, 
-        0, 
-        8, 
-        66, 
-        114, 
-        97, 
-        100, 
-        2, 
-        4, 
-        2, 
-        6, 
-        2, 
-        4, 
-        2, 
-        2, 
-        2, 
-        0, 
-        0 
+        20,0, 6, 66, 101, 110, 0, 12, 67, 111, 110, 110, 111, 
+        114, 0, 10, 78, 105, 97, 108, 108, 2, 0, 0, 8, 66, 
+        114, 97, 100, 2, 4, 2, 6, 2, 4, 2, 2, 2, 0, 0 
         ])
       );
     expect([

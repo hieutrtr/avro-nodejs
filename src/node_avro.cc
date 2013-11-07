@@ -34,7 +34,7 @@ Handle<Value> Avro::New(const Arguments& args){
     std::vector<uint8_t> data;
     ctx->buffer_ = new avronode::BufferedInputStream(data, 0, 0);
     ctx->read_  = true;
-    ctx->avro_loop_ = uv_loop_new();
+    ctx->avro_loop_ = uv_default_loop();
     ctx->Wrap(args.This());
     uv_sem_init(&ctx->sem_, 0);
     uv_mutex_init(&ctx->datumLock_);
@@ -104,7 +104,6 @@ Handle<Value> Avro::Close(const Arguments &args){
   uv_sem_post(&ctx->sem_);
   uv_mutex_unlock(&ctx->queueLock_);
   
-  //uv_loop_delete(ctx->avro_loop_);
   uv_run(ctx->avro_loop_, UV_RUN_DEFAULT); 
 
   //fires off the on close event. 

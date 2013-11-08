@@ -143,11 +143,13 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
     ctx->processQueue_.push(baton);
     uv_sem_post(&ctx->sem_);
     uv_mutex_unlock(&ctx->queueLock_);
+    printf("done with schema process\n");
     // ------------------------------------------------
     // release lock 
     // 
   }catch(std::exception &e){
     //TODO should send back the bad schema for user reference. 
+    printf("an exception for the schema\n");
     OnError(ctx, on_error, e.what());
     return scope.Close(Undefined());
   }
@@ -273,8 +275,11 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
  */
 Handle<Value> Avro::DecodeDatum(const Arguments &args){
   HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
   if(args.Length() != 2){
-    ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
+    OnError(ctx, on_error, "Wrong number of arguments");
+    //ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());        
   }
 
@@ -284,27 +289,33 @@ Handle<Value> Avro::DecodeDatum(const Arguments &args){
     //create schema from string
     v8::String::Utf8Value schemaString(args[0]->ToString());
     std::istringstream is(*schemaString);
-
     ValidSchema schema;
-    compileJsonSchema(is, schema);
-
+    Handle<Value> datumObject;
     DecoderPtr decoder = binaryDecoder();
     Local<Object> in_buf = args[1]->ToObject();
     int len = Buffer::Length(in_buf);
     uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
 
-    std::auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,len);
-    decoder->init(*inputStream);
+    try{
+      compileJsonSchema(is, schema);
 
-    //create reader and generic datum.
-    GenericReader reader(schema, decoder);
-    GenericDatum *datum = new GenericDatum(schema);
-    reader.read(*datum);
-    Handle<Value> datumObject = DecodeAvro(*datum);
-    decoder.reset();
-    delete datum;
+      std::auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,len);
+      decoder->init(*inputStream);
+
+      //create reader and generic datum.
+      GenericReader reader(schema, decoder);
+      GenericDatum *datum = new GenericDatum(schema);
+      reader.read(*datum);
+      datumObject = DecodeAvro(*datum);
+      decoder.reset();
+      delete datum;
+    }catch(std::exception &e){
+      OnError(ctx, on_error, e.what());
+    }
 
     return scope.Close(datumObject);
+  }else{
+    OnError(ctx, on_error, "arg[0] must be a Schema String and arg[1] must be an instance of Buffer.");
   }
 
   return scope.Close(Undefined());

@@ -4,7 +4,7 @@ var addon = require('../build/Release/avro');
 var avro = new addon.Avro();
 
 avro.onerror = function(error){
-  console.log(error);
+  console.error("Error: ",error);
 };
 
 var buildingSchema = '{\
@@ -24,6 +24,56 @@ var buildingSchema = '{\
       { "name": "organizationType", "type": "string" }\
     ]\
   }';
+var linkedList = '{\
+  "name":"com.gensler.scalavro.test.SinglyLinkedStringList",\
+  "type":"record",\
+  "fields":[{\
+    "name":"data",\
+    "type":"string"\
+    },\
+    {\
+    "name":"next",\
+    "type":[\
+      "null",\
+      ["com.gensler.scalavro.test.SinglyLinkedStringList",\
+      {"name":"com.gensler.scalavro.Reference",\
+        "type":"record",\
+        "fields":[{\
+          "name":"id",\
+          "type":"long"\
+        }]\
+      }]\
+    ]}\
+ ]}';
+
+
+var toyBox = '{\
+    "name": "com.gensler.scalavro.test.ToyBox",\
+    "type": "record",\
+    "fields": [{\
+      "name": "contents",\
+      "type": {\
+        "type": "array",\
+        "items": [{\
+          "name": "com.gensler.scalavro.test.Toy",\
+          "type": "record",\
+          "fields": [{\
+            "name": "name",\
+            "type": "string"\
+          }]\
+          }, {\
+          "name": "com.gensler.scalavro.Reference",\
+          "type": "record",\
+          "fields": [{\
+            "name": "id",\
+            "type": "long"\
+          }]\
+          }\
+        ]\
+      }\
+    }]\
+  }';
+
 
 var fixedExample = '{\
   "name": "com.gensler.scalavro.protocol.HandshakeRequest",\
@@ -121,6 +171,43 @@ var handshakeResponse = '{\
 var map = '{"type": "map","values": "bytes"}';
 // Some of the types supported
 // TODO finish off examples.
+describe("Testing the sync input checking", function(){
+
+  it("should require valid schema", function(done){
+    var avroInput = new addon.Avro();
+
+    avroInput.onerror = function(error){
+      expect(true).toEqual(true);
+      done();
+    }
+    avroInput.decodeDatum("bob", new Buffer([]));
+    avroInput.close();
+  });
+
+  it("should require instance of buffer", function(done){
+    var avroInput = new addon.Avro();
+
+    avroInput.onerror = function(error){
+      expect(error).toEqual("arg[0] must be a Schema String and arg[1] must be an instance of Buffer.");
+      done();
+    }
+
+    avroInput.decodeDatum(complexUnion, []);
+    avroInput.close();
+  });
+
+  it("should require intance of string for schema", function(done){
+    var avroInput = new addon.Avro();
+
+    avroInput.onerror = function(error){
+      expect(error).toEqual("arg[0] must be a Schema String and arg[1] must be an instance of Buffer.");
+      done();
+    }
+    avroInput.decodeDatum(3, new Buffer([]));
+    avroInput.close();
+  });
+
+})
 
 describe("Testing the sync encoding and decoding types", function(){
   it("should encode decode complex union", function(){
@@ -211,18 +298,59 @@ describe("Testing the sync encoding and decoding types", function(){
         114, 97, 100, 2, 4, 2, 6, 2, 4, 2, 2, 2, 0, 0 
         ])
       );
-    expect([
+    var array = [
       { name: 'Ben' },
       { name: 'Connor' },
       { name: 'Niall' },
       { name: 'Ben' },
       { name: 'Brad' },
       { name: 'Niall' },
-      { name: 'Ben' },
+      { name: 'Brad' },
       { name: 'Niall' },
       { name: 'Connor' },
-      { name: 'Ben' } ]).toEqual(referenceScalavroType);
+      { name: 'Ben' } ];
+  
+    expect(array).toEqual(referenceScalavroType);
 
+  });
+
+  it("should support linked lists", function(){
+
+    var linkedListType = avro.decodeDatum(linkedList,
+      new Buffer([
+        6, 111, 110, 101, 2, 0, 6, 116, 119,
+        111, 2, 0, 10, 116, 104, 114, 101, 101,
+        2, 0, 8, 102, 111, 117, 114, 0
+        ])
+      );
+    //At this time linkedList schema can not be resolved by
+    // C++ implementation of Avro
+    expect(true).toEqual(false);
+
+  });
+
+  it("should support reference objects", function(){
+
+    var toyBoxType = avro.decodeDatum(toyBox,
+      new Buffer([
+        26, 0, 8, 100, 111, 108, 108, 0, 10, 116, 114, 117, 99, 107, 0, 16, 100, 105, 110, 111, 115, 97, 117, 114, 0, 22, 98, 111, 117, 110, 99, 121, 32, 98, 97, 108, 108, 2, 4, 0, 28, 101, 97, 115, 121, 32, 98, 97, 107, 101, 32, 111, 118, 101, 110, 0, 32, 110, 101, 114, 102, 32, 98, 111, 119, 32, 38, 32, 97, 114, 114, 111, 119, 0, 26, 116, 101, 100, 100, 121, 32, 114, 111, 120, 115, 112, 105, 110, 0, 46, 104, 117, 103, 101, 32, 98, 111, 120, 32, 111, 102, 32, 108, 101, 103, 111, 32, 98, 108, 111, 99, 107, 115, 2, 4, 2, 4, 2, 4, 2, 4, 0
+        ])
+      );
+    var contents = { contents:
+         [ { name: 'doll' },
+         { name: 'truck' },
+         { name: 'dinosaur' },
+         { name: 'bouncy ball' },
+         { name: 'dinosaur' },
+         { name: 'easy bake oven' },
+         { name: 'nerf bow & arrow' },
+         { name: 'teddy roxspin' },
+         { name: 'huge box of lego blocks' },
+         { name: 'dinosaur' },
+         { name: 'dinosaur' },
+         { name: 'dinosaur' },
+         { name: 'dinosaur' } ] };
+    expect(contents).toEqual(toyBoxType);
   });
 
   avro.close();

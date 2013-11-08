@@ -25,11 +25,13 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum,  v8::Local<v8:
 
           const avro::GenericDatum& subDatum = record.fieldAt(i);
           if(!strcmp("com.gensler.scalavro.Reference", node->name().fullname().c_str())){
-            return reference->Get(DecodeAvro(subDatum)->Int32Value());
+            return reference->Get(DecodeAvro(subDatum, reference)->Int32Value());
           }else {
-            obj->Set(datumName, DecodeAvro(subDatum));
+            v8::Handle<v8::Value> tmp = DecodeAvro(subDatum, reference);
+            obj->Set(datumName, tmp);
           }
         }
+        reference->Set(reference->Length(), obj);
         return obj;
       }
     case avro::AVRO_STRING:
@@ -72,7 +74,7 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum,  v8::Local<v8:
         int i = 0;
         for(std::vector<avro::GenericDatum>::const_iterator it = v.begin(); it != v.end(); ++it) {
           const avro::GenericDatum &itDatum = * it;
-          datumArray->Set(i, DecodeAvro(itDatum, datumArray));
+          datumArray->Set(i, DecodeAvro(itDatum, reference));
           i++;
         }
         return datumArray;
@@ -89,7 +91,7 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum,  v8::Local<v8:
           datumArray->Set(v8::String::New(
             itDatum.first.c_str(),
             itDatum.first.size()
-            ),DecodeAvro(itDatum.second));
+            ),DecodeAvro(itDatum.second, reference));
 
           i++;
         }
@@ -123,7 +125,7 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum,  v8::Local<v8:
 
     default:
       {
-        printf("%d\n", datum.type());
+        printf("data type %d\n", datum.type());
         return obj;
       }
   }

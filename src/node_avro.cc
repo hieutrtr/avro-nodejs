@@ -143,7 +143,6 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
     ctx->processQueue_.push(baton);
     uv_sem_post(&ctx->sem_);
     uv_mutex_unlock(&ctx->queueLock_);
-    printf("done with schema process\n");
     // ------------------------------------------------
     // release lock 
     // 

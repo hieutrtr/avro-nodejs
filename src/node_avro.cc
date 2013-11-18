@@ -180,12 +180,17 @@ Handle<Value> Avro::Push(const Arguments &args){
     return scope.Close(Undefined());
   }
   try{
-    if(args[0]->IsObject()){
-      Local<Object> in_buf = args[0]->ToObject();
+    if(args[0]->IsArray()){
+      Local<Array> array = Local<Array>::Cast(args[0]);
       //get length of buffer
-      int len = Buffer::Length(in_buf);
+      int len = array->Length();
+      std::vector<uint8_t> bytes(len);
+      for(int i = 0;i<len;i++){
+        bytes[i] = array->Get(i)->Int32Value();
+      }
+
       //get data of the buffer
-      uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
+      uint8_t *in = bytes.data();
 
       // ------------------------------------------------
       // lock section here adding to BufferedInputStream.

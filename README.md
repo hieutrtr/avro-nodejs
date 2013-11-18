@@ -12,13 +12,13 @@ A wrapper for the c++ implemenation of Avro.
 
   avro.encodeDatum(schema, value);
 
-  avro.decodeDatum(schema, Buffer);
+  avro.decodeDatum(schema, [/*array of bytes*/]);
 
 #####Example
 	var addon = require('../build/Release/avro');
     var avro = new addon.Avro();
     var bytes = avro.encodeDatum('"double"', 12345.89);
-    var result = avro.decodeDatum('"double"', new Buffer(bytes));
+    var result = avro.decodeDatum('"double"', bytes);
 	avro.close();
 
 The result will contain the value that we encoded.
@@ -27,7 +27,7 @@ The result will contain the value that we encoded.
 
   avro.queueSchema(schema, onSuccess, onError);
 
-  avro.push(Buffer);
+  avro.push([/*array of bytes*/]);
 
   Currently there is only async support for decoding avro. 
   The implementation is designed for the ability to queue multiple avro schemas to be

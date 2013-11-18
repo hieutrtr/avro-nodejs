@@ -80,6 +80,7 @@ describe("An Async test for Avro", function(){
         fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
           var section = b.slice(0,l);
           avro.push(section);
+          console.log("pushed last section");
           fs.close(fd);
         });
       }

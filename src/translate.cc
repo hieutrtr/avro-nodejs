@@ -46,7 +46,7 @@ v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum,  v8::Local<v8:
         v8::Local<v8::Array> byteArray = v8::Array::New();
         const std::vector<uint8_t> &v = datum.value<std::vector<uint8_t> >();
         for(size_t i = 0;i<v.size();i++){
-          byteArray->Set(i, v8::Uint32::New(v[i]));
+          byteArray->Set(i, v8::Int32::New(v[i]));
         }
         return byteArray;
       }        
@@ -148,9 +148,14 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
       v8::Local<v8::Object> obj = object->ToObject();
       v8::Local<v8::Array> properties = obj->GetPropertyNames();
       //Set the object to the value of the union. 
-      v8::Local<v8::Value> typeObject = properties->Get(0);
-      object = obj->Get(typeObject->ToString());
-
+      v8::Local<v8::Value> typeObject;
+      if(obj->Has(v8::String::New("namespace"))){
+        typeObject = obj->Get(v8::String::New("namespace"));
+        v8::String::Utf8Value constructorString(obj->GetConstructorName());
+      }else{
+        typeObject = properties->Get(0);
+        object = obj->Get(typeObject->ToString());
+      }
       v8::String::Utf8Value typeString(typeObject->ToString());
       unionBranch(&datum, *typeString);
     }else{
@@ -169,6 +174,7 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
         for(uint i = 0; i<record.fieldCount(); i++){
           //Add values
           v8::Local<v8::String> datumName = v8::String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
+
           datum.value<avro::GenericRecord>().fieldAt(i) = DecodeV8(record.fieldAt(i), obj->Get(datumName));
         }
       }
@@ -181,12 +187,11 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
       break;
     case avro::AVRO_BYTES:
       {
-        v8::Local<v8::Object> array = object->ToObject();
-        //get length of buffer
-        int len = node::Buffer::Length(array);
-        uint8_t *in = reinterpret_cast<uint8_t*>(node::Buffer::Data(array));
-        std::vector<uint8_t> bytes;
-        bytes.insert(bytes.end(), in, in+len);
+        v8::Local<v8::Array> array = v8::Local<v8::Array>::Cast(object);
+        std::vector<uint8_t> bytes(array->Length());
+        for(int i = 0;i<array->Length();i++){
+          bytes[i] = array->Get(i)->Int32Value();
+        }
         datum.value<std::vector<uint8_t> >() = bytes;
       }
       break;       
@@ -260,12 +265,12 @@ avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> objec
     case avro::AVRO_FIXED:
       {
         avro::GenericFixed &genFixed = datum.value<avro::GenericFixed>();
-        v8::Local<v8::Object> array = object->ToObject();
+        v8::Local<v8::Array> array = v8::Local<v8::Array>::Cast(object);
         //get length of buffer
-        int len = node::Buffer::Length(array);
-        uint8_t *in = reinterpret_cast<uint8_t*>(node::Buffer::Data(array));
-        std::vector<uint8_t> bytes;
-        bytes.insert(bytes.end(), in, in+len);
+        std::vector<uint8_t> bytes(array->Length());
+        for(int i = 0;i<array->Length();i++){
+          bytes[i] = array->Get(i)->Int32Value();
+        }
         genFixed.value() = bytes;
         datum.value<avro::GenericFixed>() = genFixed;
       }
@@ -297,7 +302,6 @@ void unionBranch(avro::GenericDatum *datum, const char *type){
   try{
 
     int branches = datum->unionBranch();
-
     for(int i = 0; i<branches;i++){
       datum->selectBranch(i);
 

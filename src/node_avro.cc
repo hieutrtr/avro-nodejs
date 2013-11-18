@@ -278,23 +278,25 @@ Handle<Value> Avro::DecodeDatum(const Arguments &args){
 
   if(args.Length() != 2){
     OnError(ctx, on_error, "Wrong number of arguments");
-    //ThrowException(v8::Exception::TypeError(String::New("Wrong number of arguments")));
     return scope.Close(Undefined());        
   }
 
   // throws error if there is no Buffer instance for 
   // args[1].
-  if(args[0]->IsString()&&Buffer::HasInstance(args[1])){
+  if(args[0]->IsString()&&args[1]->IsArray()){
     //create schema from string
     v8::String::Utf8Value schemaString(args[0]->ToString());
     std::istringstream is(*schemaString);
     ValidSchema schema;
     Handle<Value> datumObject;
     DecoderPtr decoder = binaryDecoder();
-    Local<Object> in_buf = args[1]->ToObject();
-    int len = Buffer::Length(in_buf);
-    uint8_t *in = reinterpret_cast<uint8_t*>(Buffer::Data(in_buf));
-
+    Local<Array> array = Local<Array>::Cast(args[1]);
+    int len = array->Length();
+    std::vector<uint8_t> bytes(len);
+    for(int i = 0;i<len;i++){
+      bytes[i] = array->Get(i)->Int32Value();
+    }
+    uint8_t *in = bytes.data();
     try{
       compileJsonSchema(is, schema);
 

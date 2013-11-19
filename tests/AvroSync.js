@@ -65,6 +65,11 @@ var linkedList = '{\
       }]\
     ]}\
  ]}';
+var array = '{\
+  "name": "com.common.test.array",\
+  "type": "array",\
+  "items": "string"\
+}';
 
 
 var toyBox = '{\
@@ -249,6 +254,15 @@ describe("Testing the sync encoding and decoding types", function(){
 
   });
 
+  it("should encode decode arrays", function(){
+    var arrayTestData = ["hello", "bye", "YOLO"];
+    var arrayResult = avro.decodeDatum(array, 
+      avro.encodeDatum(array, arrayTestData)
+      );
+    expect(arrayTestData).toEqual(arrayResult);
+
+  });
+
   it("should encode decode long", function(){
     var longResult = avro.decodeDatum('"long"', avro.encodeDatum('"long"', 12345));
     expect(12345).toEqual(longResult);
@@ -348,28 +362,42 @@ describe("Testing the sync encoding and decoding types", function(){
 
   });
 
-  it("should support reference objects", function(){
 
-    var toyBoxType = avro.decodeDatum(toyBox,
-      [
-        26, 0, 8, 100, 111, 108, 108, 0, 10, 116, 114, 117, 99, 107, 0, 16, 100, 105, 110, 111, 115, 97, 117, 114, 0, 22, 98, 111, 117, 110, 99, 121, 32, 98, 97, 108, 108, 2, 4, 0, 28, 101, 97, 115, 121, 32, 98, 97, 107, 101, 32, 111, 118, 101, 110, 0, 32, 110, 101, 114, 102, 32, 98, 111, 119, 32, 38, 32, 97, 114, 114, 111, 119, 0, 26, 116, 101, 100, 100, 121, 32, 114, 111, 120, 115, 112, 105, 110, 0, 46, 104, 117, 103, 101, 32, 98, 111, 120, 32, 111, 102, 32, 108, 101, 103, 111, 32, 98, 108, 111, 99, 107, 115, 2, 4, 2, 4, 2, 4, 2, 4, 0
-        ]
-      );
-    var contents = { contents:
-         [ { name: 'doll' },
-         { name: 'truck' },
-         { name: 'dinosaur' },
-         { name: 'bouncy ball' },
-         { name: 'dinosaur' },
-         { name: 'easy bake oven' },
-         { name: 'nerf bow & arrow' },
-         { name: 'teddy roxspin' },
-         { name: 'huge box of lego blocks' },
-         { name: 'dinosaur' },
-         { name: 'dinosaur' },
-         { name: 'dinosaur' },
-         { name: 'dinosaur' } ] };
-    expect(contents).toEqual(toyBoxType);
+  it("should support reference objects", function(){
+    var Toy = function Toy(name){
+      Object.defineProperty(this, "namespace",{
+        value: "com.gensler.scalavro.test.Toy"
+      });
+      Object.defineProperty(this, "name", {
+        enumerable: true,
+        get: function(){
+          return _name;
+        },
+        set: function(val){
+          _name = val;
+        }
+      });
+      
+      var _name;
+      this.name= name;
+    }
+
+    var dinosaur = new Toy('dinosaur');
+    var contents = { contents: [
+      new Toy('doll'),
+      new Toy('truck'),
+      dinosaur,
+      new Toy('teddy roxspin'),
+      dinosaur,
+      dinosaur,
+      dinosaur,
+      dinosaur
+    ]
+    };
+    var toyBoxType = avro.encodeDatum(toyBox,contents);
+    var result = (avro.decodeDatum(toyBox,toyBoxType));
+    expect(contents).toEqual(result);
+
   });
 
   it("should be able to parse a request schema", function(){
@@ -390,15 +418,21 @@ describe("Testing the sync encoding and decoding types", function(){
     }
 
     var guid = new GUID([8,-85,-51,18,52]);
+    var obj = {id: guid};
 
     var encodedRequestType = avro.encodeDatum(
-          requestSchema, { id: guid }
+          requestSchema, obj
         );
+    var guid2 = new GUID([2,3,4,4,5,6,7,7]);
+    obj.id = guid2;
 
+    var encodedRequestType = avro.encodeDatum(
+          requestSchema, obj
+        );
 
     var requestType = avro.decodeDatum(requestSchema, 
           encodedRequestType);
-    expect({id: { bytes: [ 8, 171, 205, 18, 52 ]}}).toEqual(requestType);
+    expect(obj).toEqual(requestType);
   });
 
   avro.close();

@@ -8,6 +8,7 @@
 void unionBranch(avro::GenericDatum *datum, const char *type);
 
 avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> object);
+avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> object, std::vector<int> *reference);
 
 v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum);
 v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum, v8::Local<v8::Array> reference);

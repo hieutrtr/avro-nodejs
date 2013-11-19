@@ -36,6 +36,9 @@ var jsonSchema = '{\
       }]\
     }\
   ]}';
+Buffer.prototype.toByteArray = function () {
+    return Array.prototype.slice.call(this, 0)
+}
 
 
 
@@ -70,7 +73,7 @@ describe("An Async test for Avro", function(){
     var buf=function(fs,fd,i,s,buffer){
       if(i+buffer.length<s){
         fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
-          avro.push(b.slice(0,l));
+          avro.push(b.slice(0,l).toByteArray());
           i=i+buffer.length;
           setTimeout(function(){
             buf(fs,fd,i,s,buffer);
@@ -79,7 +82,8 @@ describe("An Async test for Avro", function(){
       }else{
         fs.read(fd,buffer,0,buffer.length,i,function(e,l,b){
           var section = b.slice(0,l);
-          avro.push(section);
+          avro.push(section.toByteArray());
+          console.log("pushed last section");
           fs.close(fd);
         });
       }

@@ -23,8 +23,6 @@ bool BufferedInputStream::next(const uint8_t** data, size_t* len) {
       return false;
     }
   }
-  //*len = 1 ;
-  //data_.readData(const_cast<uint8_t**>(data),0,1);
   *len = data_.readBlock(const_cast<uint8_t**>(data));
 
   pthread_mutex_unlock(&lock);
@@ -52,7 +50,6 @@ void BufferedInputStream::backup(size_t len) {
  * @param len [description]
  */
 void BufferedInputStream::append(uint8_t* in , int len) {
-  //printf(" we're writting\n");
   pthread_mutex_lock( &lock);
   data_.appendData(in, 0, len);
 

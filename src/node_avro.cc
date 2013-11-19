@@ -1,12 +1,8 @@
 #include "node_avro.h"
 #include "translate.h"
+#include "helpers.h"
 
 namespace node {
-
-
-using namespace v8;
-using namespace node;
-using namespace avro;
 
 Persistent<String> on_schema;
 Persistent<String> on_datum;
@@ -126,7 +122,7 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
     return scope.Close(Undefined());
   }
   //grab string from input.
-  v8::String::Utf8Value schemaString(args[0]->ToString());
+  String::Utf8Value schemaString(args[0]->ToString());
   std::istringstream is(*schemaString);
 
   try{
@@ -180,14 +176,7 @@ Handle<Value> Avro::Push(const Arguments &args){
     return scope.Close(Undefined());
   }
   try{
-    if(args[0]->IsArray()){
-      Local<Array> array = Local<Array>::Cast(args[0]);
-      //get length of buffer
-      int len = array->Length();
-      std::vector<uint8_t> bytes(len);
-      for(int i = 0;i<len;i++){
-        bytes[i] = array->Get(i)->Int32Value();
-      }
+      std::vector<uint8_t> bytes = helper::getBinaryData(args[0]); 
 
       //get data of the buffer
       uint8_t *in = bytes.data();
@@ -196,14 +185,11 @@ Handle<Value> Avro::Push(const Arguments &args){
       // lock section here adding to BufferedInputStream.
       //uv_mutex_lock(&ctx->datumLock_);
 
-      ctx->buffer_->append(in,len);
+      ctx->buffer_->append(in,bytes.size());
 
       //uv_mutex_unlock(&ctx->datumLock_); 
       // release lock section here.      
       // ------------------------------------------------
-    }else{
-      OnError(ctx, on_error, "Argument must be a Byte Array");
-    }
 
   }catch(std::exception &e){
     //TODO should send back the bad schema for user reference. 
@@ -288,24 +274,19 @@ Handle<Value> Avro::DecodeDatum(const Arguments &args){
 
   // throws error if there is no Buffer instance for 
   // args[1].
-  if(args[0]->IsString()&&args[1]->IsArray()){
+  if(args[0]->IsString()){
     //create schema from string
-    v8::String::Utf8Value schemaString(args[0]->ToString());
+    String::Utf8Value schemaString(args[0]->ToString());
     std::istringstream is(*schemaString);
     ValidSchema schema;
     Handle<Value> datumObject;
     DecoderPtr decoder = binaryDecoder();
-    Local<Array> array = Local<Array>::Cast(args[1]);
-    int len = array->Length();
-    std::vector<uint8_t> bytes(len);
-    for(int i = 0;i<len;i++){
-      bytes[i] = array->Get(i)->Int32Value();
-    }
+    std::vector<uint8_t> bytes = helper::getBinaryData(args[1]);
     uint8_t *in = bytes.data();
     try{
       compileJsonSchema(is, schema);
 
-      std::auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,len);
+      std::auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,bytes.size());
       decoder->init(*inputStream);
 
       //create reader and generic datum.

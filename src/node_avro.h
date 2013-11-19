@@ -13,18 +13,20 @@
 #include <fstream>
 #include <queue>
 #include "BufferedInputStream.hh"
+#include "helpers.h"
 
+using namespace node;
+using namespace avro;
+using namespace v8;
 
 namespace node {
 
-using namespace node;
-
 struct datumBaton {
-  avro::ValidSchema schema;
-  avro::GenericDatum *datum;
+  ValidSchema schema;
+  GenericDatum *datum;
   const char* errorMessage;
-  v8::Persistent<v8::Value> onSuccess;
-  v8::Persistent<v8::Value> onError;
+  Persistent<Value> onSuccess;
+  Persistent<Value> onError;
 };
 
 class Avro : public ObjectWrap
@@ -35,7 +37,7 @@ public:
   //Buffer *buffer_;
   std::queue<datumBaton> processQueue_;
   std::vector<datumBaton> datums_;
-  avro::DecoderPtr decoder_;
+  DecoderPtr decoder_;
   uv_sem_t sem_;
   uv_loop_t *avro_loop_;
   uv_async_t async_;
@@ -43,18 +45,18 @@ public:
   uv_mutex_t queueLock_;
   avronode::BufferedInputStream *buffer_;
   bool read_;
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Handle<Object> target);
 private: 
-  static v8::Handle<v8::Value> New(const v8::Arguments& args);
-  static v8::Handle<v8::Value> QueueSchema(const v8::Arguments &args);
-  static v8::Handle<v8::Value> PendingSchemas(const v8::Arguments &args);
-  static v8::Handle<v8::Value> Push(const v8::Arguments &args);  
-  static v8::Handle<v8::Value> BufferLength(const v8::Arguments &args);
-  static v8::Handle<v8::Value> DecodeFile(const v8::Arguments &args);
-  static v8::Handle<v8::Value> EncodeFile(const v8::Arguments &args);
-  static v8::Handle<v8::Value> EncodeDatum(const v8::Arguments &args);
-  static v8::Handle<v8::Value> DecodeDatum(const v8::Arguments &args);
-  static v8::Handle<v8::Value> Close(const v8::Arguments &args);
+  static Handle<Value> New(const Arguments& args);
+  static Handle<Value> QueueSchema(const Arguments &args);
+  static Handle<Value> PendingSchemas(const Arguments &args);
+  static Handle<Value> Push(const Arguments &args);  
+  static Handle<Value> BufferLength(const Arguments &args);
+  static Handle<Value> DecodeFile(const Arguments &args);
+  static Handle<Value> EncodeFile(const Arguments &args);
+  static Handle<Value> EncodeDatum(const Arguments &args);
+  static Handle<Value> DecodeDatum(const Arguments &args);
+  static Handle<Value> Close(const Arguments &args);
 
 };
 }

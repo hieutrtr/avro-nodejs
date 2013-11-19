@@ -4,11 +4,17 @@
 #include <avro/ValidSchema.hh>
 #include <avro/Generic.hh>
 #include <avro/Specific.hh>
+#include <vector>
+#include "helpers.h"
 
-void unionBranch(avro::GenericDatum *datum, const char *type);
+using namespace v8;
+using namespace avro;
+using namespace std;
 
-avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> object);
-avro::GenericDatum DecodeV8(avro::GenericDatum datum, v8::Local<v8::Value> object, std::vector<int> *reference);
+void unionBranch(GenericDatum *datum, const char *type);
 
-v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum);
-v8::Handle<v8::Value> DecodeAvro(const avro::GenericDatum& datum, v8::Local<v8::Array> reference);
+GenericDatum DecodeV8(GenericDatum datum, Local<Value> object);
+GenericDatum DecodeV8(GenericDatum datum, Local<Value> object, std::vector<int> *reference);
+
+Handle<Value> DecodeAvro(const GenericDatum& datum);
+Handle<Value> DecodeAvro(const GenericDatum& datum, Local<Array> reference);

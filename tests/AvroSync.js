@@ -220,6 +220,20 @@ describe("Testing the sync input checking", function(){
     avroInput.close();
   });
 
+  it("should allow array of bytes or a nodejs Buffer for decodeDatum", function(){
+    var complexBinary = avro.encodeDatum(complexUnion, 
+      { "A": {"x": {string: "a String"}}}
+    );
+    var resultFromArray = avro.decodeDatum(complexUnion,
+          complexBinary
+        );
+    var resultFromBuffer = avro.decodeDatum(complexUnion,
+          new Buffer(complexBinary)
+        );
+    console.log(resultFromArray, resultFromBuffer);
+
+  });
+
 })
 
 describe("Testing the sync encoding and decoding types", function(){

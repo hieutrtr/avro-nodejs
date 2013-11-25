@@ -154,14 +154,14 @@ GenericDatum DecodeV8(GenericDatum datum, Local<Value> object, vector<int> *refe
       Local<Object> obj = object->ToObject();
       //Set the object to the value of the union. 
       Local<Value> typeObject;
-      if(obj->Has(v8::String::New("namespace"))){
-        typeObject = obj->Get(v8::String::New("namespace"));
-        v8::String::Utf8Value constructorString(obj->GetConstructorName());
+      if(obj->Has(String::New("namespace"))){
+        typeObject = obj->Get(String::New("namespace"));
+        String::Utf8Value constructorString(obj->GetConstructorName());
       }else{
         typeObject = obj->GetPropertyNames()->Get(0);
         object = obj->Get(typeObject->ToString());
       }
-      v8::String::Utf8Value typeString(typeObject->ToString());
+      String::Utf8Value typeString(typeObject->ToString());
       unionBranch(&datum, *typeString);
     }else{
       unionBranch(&datum, "null");

@@ -57,16 +57,14 @@ The currently implementation is defined to keep getting input from queueSchema a
 
 # Testing
 
-To run the tests you'll need to install jasmine-node.
+To run the tests you'll need to install mocha.
 
-	npm install jasmine-node -g
+	npm install mocha -g
 
 Once that is done just run the specified test. 
 
-	jasmine-node --verbose --matchall tests/AvroSync.js
+	mocha tests/AvroSync.js
 
-There seems to be a bug in jasmine node and the only way I can get it to detect my test files is by running
-the --matchall option. Possibly upgrading the version of jasmine-node may fix this. TODO
 
 #Build and run
 

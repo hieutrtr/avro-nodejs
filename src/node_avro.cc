@@ -8,6 +8,7 @@ Persistent<String> on_schema;
 Persistent<String> on_datum;
 Persistent<String> on_error;
 Persistent<String> on_close;
+static ValidSchema getValidSchema(string type, string schemaString, helper::SymbolMap dictionary);
 
 static void ResultEvent(uv_async_t *handle, int status);
 static void Process(uv_work_t* work_req);
@@ -123,10 +124,9 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
   }
   //grab string from input.
   String::Utf8Value schemaString(args[0]->ToString());
-  std::istringstream is(*schemaString);
 
   try{
-    compileJsonSchema(is, baton.schema);
+    baton.schema = getValidSchema(*schemaString, *schemaString, ctx->dictionary_);
 
     // if args > 2 and args[1] is a function set our onSuccess  
     handleCallbacks(ctx, &baton, args, 1);
@@ -176,14 +176,14 @@ Handle<Value> Avro::Push(const Arguments &args){
     return scope.Close(Undefined());
   }
   try{
+      // ------------------------------------------------
+      // lock section here adding to BufferedInputStream.
+      //uv_mutex_lock(&ctx->datumLock_);
       std::vector<uint8_t> bytes = helper::getBinaryData(args[0]); 
 
       //get data of the buffer
       uint8_t *in = bytes.data();
 
-      // ------------------------------------------------
-      // lock section here adding to BufferedInputStream.
-      //uv_mutex_lock(&ctx->datumLock_);
 
       ctx->buffer_->append(in,bytes.size());
 
@@ -213,11 +213,40 @@ Handle<Value> Avro::BufferLength(const Arguments &args){
    
 }
 
+
+/**
+ * Validates and adds the schema definition to the dictionary.
+ */
+Handle<Value> Avro::AddSchema(const Arguments &args){
+  HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+  if(!args[0]->IsString()){
+    OnError(ctx, on_error, "schema must be a string");
+    return scope.Close(Undefined());
+  }
+
+  v8::String::Utf8Value schemaString(args[0]->ToString());
+  ValidSchema schema;
+  try{
+    //grab string from input.
+    std::istringstream is(*schemaString);
+    compileJsonSchema(is, schema);
+    helper::validate(schema.root(),ctx->dictionary_);
+    printf("size of dictionary %d\n",ctx->dictionary_.size());
+  }catch(std::exception &e){
+    OnError(ctx, on_error, e.what());
+  }
+
+  return scope.Close(Undefined());
+}
+
 /**
  * Takes a avro data file that must contain the schema definition
  * as part of the file. For each datum that is parsed out of the file
  * OnDatum will be called. 
  * @param avrofile [The file containing the Avro data and schema. ]
+ * TODO to be depricated functionality being moved over to AvroReadFile. 
  */
 Handle<Value> Avro::DecodeFile(const Arguments &args) {  
   HandleScope scope;
@@ -238,6 +267,7 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
     try{
       avro::DataFileReader<avro::GenericDatum> dfr(*filename);
       ValidSchema schema = dfr.dataSchema();
+      
       std::ostringstream oss(std::ios_base::out);
       avro::GenericDatum datum(dfr.dataSchema());
 
@@ -260,146 +290,110 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
 /**
  * The sync version of decode datum. The buffer of bytes provided must 
  * contain the entire datum to be decoded. Otherwise an error will be thrown.
- * @param schema [The schema to decode bytes with.]
  * @param bytes [A node Buffer object containing all of the bytes of the datum.]
+ * @param type [A string representing the type to be decoded]
+ * @param schema [The schema to decode bytes with.]
  */
 Handle<Value> Avro::DecodeDatum(const Arguments &args){
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+  Handle<Value> datumObject;
+  ValidSchema schema;
 
-  if(args.Length() != 2){
+  if(args.Length() < 2){
     OnError(ctx, on_error, "Wrong number of arguments");
     return scope.Close(Undefined());        
   }
+  Local<String> type;
 
-  // throws error if there is no Buffer instance for 
-  // args[1].
-  if(args[0]->IsString()){
-    //create schema from string
-    String::Utf8Value schemaString(args[0]->ToString());
-    std::istringstream is(*schemaString);
-    ValidSchema schema;
-    Handle<Value> datumObject;
+  //create schema from string
+  String::Utf8Value typeStr(args[1]->ToString());
+
+  try{
+
+    schema = getValidSchema(*typeStr, *typeStr, ctx->dictionary_);
     DecoderPtr decoder = binaryDecoder();
-    std::vector<uint8_t> bytes = helper::getBinaryData(args[1]);
+    vector<uint8_t> bytes = helper::getBinaryData(args[0]);
     uint8_t *in = bytes.data();
-    try{
-      compileJsonSchema(is, schema);
 
-      std::auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,bytes.size());
-      decoder->init(*inputStream);
+    auto_ptr<avro::InputStream> inputStream = memoryInputStream(in,bytes.size());
+    decoder->init(*inputStream);
 
-      //create reader and generic datum.
-      GenericReader reader(schema, decoder);
-      GenericDatum *datum = new GenericDatum(schema);
-      reader.read(*datum);
-      datumObject = DecodeAvro(*datum);
-      decoder.reset();
-      delete datum;
-    }catch(std::exception &e){
-      OnError(ctx, on_error, e.what());
-    }
-
-    return scope.Close(datumObject);
-  }else{
-    OnError(ctx, on_error, "arg[0] must be a Schema String and arg[1] must be an instance of Buffer.");
+    //create reader and generic datum.
+    GenericReader reader(schema, decoder);
+    GenericDatum *datum = new GenericDatum(schema);
+    reader.read(*datum);
+    datumObject = DecodeAvro(*datum);
+    decoder.reset();
+    delete datum;
+  }catch(std::exception &e){
+    OnError(ctx, on_error, e.what());
   }
 
-  return scope.Close(Undefined());
-}
+  return scope.Close(datumObject);
 
-/**
- * Encodes data to a file specified.
- *
- * @param filename [The file to write to]
- * @param schema [The schema to encode the data with.]
- * @param data [The data that is going to be encoded with specified schema.]
- */
-Handle<Value> Avro::EncodeFile(const Arguments &args) { 
-  HandleScope scope; 
-  /*
-  if(args[0]->IsString()){
-    // get the param
-    v8::String::Utf8Value filename(args[0]->ToString());
-
-    std::ifstream ifs("cpx.json");
-
-    avro::ValidSchema cpxSchema;
-    avro::compileJsonSchema(ifs, cpxSchema);
-
-    std::auto_ptr<avro::OutputStream> out = memoryOutputStream(1);
-    avro::EncoderPtr e = binaryEncoder();
-    e->init(*out);
-
-    for(int i = 0;i<1;i++){
-      c::cpx c1;
-      c1.re.set_double(10*i);
-      c1.im = 105;
-      encode(*e,c1);
-    }
-
-    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
-
-    StreamReader reader(*in);
-    std::ofstream myFile ("data.bin", std::ios::out | std::ios::binary);
-    while(reader.hasMore()){
-      myFile.put(reader.read());
-    }
-    //for some reason calling myFile.flush() was 
-    //causeing the un defined buffer of reader or in 
-    // to be written causing all sorts of problems. 
-    myFile.close();
-  }
-  */
-  return scope.Close(Undefined());
 }
 
 /**
  * A synchronous function to encode a datum into avro binary
- * @param schema [The schema to encode the datum with]
  * @param datum [The datum to be encoded]
+ * @param (optional) schema [The schema to encode the datum with]
  */
 Handle<Value> Avro::EncodeDatum(const Arguments &args){
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+  Local<Array> byteArray = Array::New();
+  ValidSchema schema;
+  EncoderPtr e;
+  auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
 
-  if(args.Length()< 2){
-    OnError(ctx, on_error, "EncodeDatum requires two params");
+  if(args.Length()< 1){
+    OnError(ctx, on_error, "EncodeDatum: no value to encode");
     return scope.Close(Array::New());
   }
 
-  if(!args[0]->IsString()){
+  if(args.Length() > 1 && !args[1]->IsString()){
     OnError(ctx, on_error, "schema must be a string");
     return scope.Close(Array::New());
   }
 
-  Local<Array> byteArray = Array::New();
-  v8::String::Utf8Value schemaString(args[0]->ToString());
-  Local<Value> object = args[1];
-  ValidSchema schema;
+  v8::String::Utf8Value schemaString(args[1]->ToString());
+  Local<Value> value = args[0];
 
   try{
-    //grab string from input.
+    // The object (currently defined as namespace)
+    Local<String> objectType;
 
-    std::istringstream is(*schemaString);
-    //create schema
-    //
-    compileJsonSchema(is, schema);
+    //if is object then see if there is a namespace else set type to schema
+    if(value->IsObject()){
+      Local<Object> object = value->ToObject();
+      //if namespace use that else use args[1] for type
+      if(object->Has(String::New("namespace"))){
+        objectType = object->Get(String::New("namespace"))->ToString();
+      }else{
+        objectType = args[1]->ToString();
+      }
+    }else{
+      objectType = args[1]->ToString();
+    }
+    
+    String::Utf8Value typeString(objectType);
 
-    avro::GenericDatum datum(schema);
-    datum = DecodeV8(datum, object);
+    //Get the schema either from the dictionary or the provided
+    //Schema (adding the schema if it has a type)
+    schema = getValidSchema(*typeString, *schemaString, ctx->dictionary_); 
 
-    std::auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
-    avro::EncoderPtr e = avro::validatingEncoder(schema, avro::binaryEncoder());
+    GenericDatum datum(schema);
+    datum = DecodeV8(datum, value);
 
+    e = validatingEncoder(schema, binaryEncoder());
     e->init(*out);
-
-    avro::encode(*e, datum);
-
+    encode(*e, datum);
+    
     //need to flush the bytes to the stream (aka out);
     e->flush();
 
-    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
+    auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
 
     avro::StreamReader reader(*in);
     int i = 0;
@@ -409,8 +403,8 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
       i++;
     }
   }catch(std::exception &e){
-    std::string error = e.what();
-    std::string errorMessage = error + *schemaString + "\n";
+    string error = e.what();
+    string errorMessage = error + *schemaString + "\n";
     OnError(ctx, on_error, errorMessage.c_str());
     return scope.Close(Array::New());
   }
@@ -418,6 +412,34 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
   //construct a byte array to send back to the javascript
 
   return scope.Close(byteArray);
+}
+
+/**
+ * A helper function to get a ValidSchema. 
+ *
+ * @param type. Is a possible mapping into the SymbolMap. If is found the schema associated with it is returned.
+ * @param schemaString. The schema as a json string.
+ * @param dictionary. The symbol map for known types to schema definitions. 
+ */
+static ValidSchema getValidSchema(string type, string schemaString, helper::SymbolMap dictionary){
+
+  try{
+
+    Name *fullName = new Name(type);
+    helper::SymbolMap::iterator it;
+    if((it = dictionary.find(*fullName)) != dictionary.end()){
+      return  *(new ValidSchema(it->second));
+    }
+  }catch(exception &e){
+    //not a valid name wish there was final 
+  }
+
+  ValidSchema schema;
+  std::istringstream is(schemaString);
+  compileJsonSchema(is, schema);
+  helper::validate(schema.root(),dictionary);
+
+  return schema;
 }
 
 /**
@@ -539,7 +561,7 @@ static void OnError(Avro *ctx, Persistent<Value> callback, const char* error){
     if(callback_v->IsFunction()){
       MakeCallback(ctx->handle_, Local<Function>::Cast(callback_v), 1, args);
     }else{
-      v8::ThrowException(v8::String::New(error));
+      ThrowException(String::New(error));
     }
 
   }else{
@@ -616,7 +638,7 @@ void Avro::Initialize(Handle<Object> target){
   a_temp->InstanceTemplate()->SetInternalFieldCount(1);
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeFile", Avro::DecodeFile);
-  NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeFile", Avro::EncodeFile);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "addSchema", Avro::AddSchema);
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "bufferLength", Avro::BufferLength);
@@ -634,7 +656,5 @@ void Avro::Initialize(Handle<Object> target){
   on_close = NODE_PSYMBOL("onclose");
 
 }
-
-NODE_MODULE(avro, Avro::Initialize);
 
 }

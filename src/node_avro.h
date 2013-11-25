@@ -3,6 +3,7 @@
 #include <node_buffer.h>
 #include <avro/ValidSchema.hh>
 #include <avro/Generic.hh>
+#include <avro/Schema.hh>
 #include <avro/DataFile.hh>
 #include <avro/Compiler.hh>
 #include <avro/Decoder.hh>
@@ -32,12 +33,12 @@ struct datumBaton {
 class Avro : public ObjectWrap
 {
 public:
-  Avro() : ObjectWrap(){};
+  Avro() : ObjectWrap(), dictionary_(){};
   ~Avro() {};
-  //Buffer *buffer_;
   std::queue<datumBaton> processQueue_;
   std::vector<datumBaton> datums_;
   DecoderPtr decoder_;
+  helper::SymbolMap dictionary_;
   uv_sem_t sem_;
   uv_loop_t *avro_loop_;
   uv_async_t async_;
@@ -49,11 +50,11 @@ public:
 private: 
   static Handle<Value> New(const Arguments& args);
   static Handle<Value> QueueSchema(const Arguments &args);
+  static Handle<Value> AddSchema(const Arguments &args);
   static Handle<Value> PendingSchemas(const Arguments &args);
   static Handle<Value> Push(const Arguments &args);  
   static Handle<Value> BufferLength(const Arguments &args);
   static Handle<Value> DecodeFile(const Arguments &args);
-  static Handle<Value> EncodeFile(const Arguments &args);
   static Handle<Value> EncodeDatum(const Arguments &args);
   static Handle<Value> DecodeDatum(const Arguments &args);
   static Handle<Value> Close(const Arguments &args);

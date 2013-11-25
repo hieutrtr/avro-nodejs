@@ -233,7 +233,6 @@ Handle<Value> Avro::AddSchema(const Arguments &args){
     std::istringstream is(*schemaString);
     compileJsonSchema(is, schema);
     helper::validate(schema.root(),ctx->dictionary_);
-    printf("size of dictionary %d\n",ctx->dictionary_.size());
   }catch(std::exception &e){
     OnError(ctx, on_error, e.what());
   }

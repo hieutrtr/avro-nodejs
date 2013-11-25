@@ -1,25 +1,23 @@
-var fs = require('fs');
-var addon = require('../build/Release/avro');
+var addon = require('../build/Release/addon');
+var assert = require('assert');
 
 
 describe("An Async test for Avro", function(){
 	it("should emit an event when the avro object has been closed",
-    function(done){
+    function(){
       var avro = new addon.Avro();
 	  	avro.onclose = function(){
-	  		expect(true).toEqual(true);
-	  		done();
+        assert.equal(true,true);
 	  	}
 	  	avro.close();
 	  }
   );
 
   it("should not throw an error if no callback for close is defined",
-    function(done){
+    function(){
       var avro = new addon.Avro();
       avro.close();
-      expect(true).toEqual(true);
-      done();
+      assert.equal(true,true);
     }
   );
 });

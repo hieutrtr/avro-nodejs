@@ -1,5 +1,5 @@
-var fs = require('fs');
-var addon = require('../build/Release/avro');
+var addon = require('../build/Release/addon');
+var assert = require("assert");
 
 var avro = new addon.Avro();
 
@@ -23,7 +23,26 @@ var buildingSchema = '{\
       { "name": "name", "type": "string" },\
       { "name": "organizationType", "type": "string" }\
     ]\
-  }';
+  },\
+  {\
+    "type":"record",\
+    "name":"properties.GetProperty",\
+    "fields":[{\
+      "type":[\
+        {\
+          "type":"record",\
+          "name":"models.common.GUID",\
+          "fields":[{"type":"bytes","name":"bytes"}]\
+        },\
+        {\
+          "type":"record",\
+          "name":"Reference",\
+          "fields":[{"type":"long","name":"id"}]\
+        }\
+      ],\
+    "name":"id"}\
+ ]}';
+
 
 var requestSchema = '{\
     "type":"record",\
@@ -202,35 +221,34 @@ describe("Testing the sync input checking", function(){
     var avroInput = new addon.Avro();
 
     avroInput.onerror = function(error){
-      expect(true).toEqual(true);
+      assert.equal(true, true);
       done();
     }
-    avroInput.decodeDatum("bob", []);
+    avroInput.decodeDatum([],"bob");
     avroInput.close();
   });
 
+  //TODO fix test
   it("should require intance of string for schema", function(done){
     var avroInput = new addon.Avro();
 
     avroInput.onerror = function(error){
-      expect(error).toEqual("arg[0] must be a Schema String and arg[1] must be an instance of Buffer.");
+      assert.equal("Invalid Avro type: 3", error);
       done();
     }
-    avroInput.decodeDatum(3, []);
+    avroInput.decodeDatum([],"3");
     avroInput.close();
   });
 
   it("should allow array of bytes or a nodejs Buffer for decodeDatum", function(){
-    var complexBinary = avro.encodeDatum(complexUnion, 
-      { "A": {"x": {string: "a String"}}}
+    avro.addSchema(complexUnion);
+    var binary = avro.encodeDatum( 
+      { "x": {string: "a String"}, namespace: "A"}
     );
-    var resultFromArray = avro.decodeDatum(complexUnion,
-          complexBinary
-        );
-    var resultFromBuffer = avro.decodeDatum(complexUnion,
-          new Buffer(complexBinary)
-        );
-    console.log(resultFromArray, resultFromBuffer);
+    var resultFromArray = avro.decodeDatum(binary,"A");
+    var resultFromBuffer = avro.decodeDatum(new Buffer(binary), "A");
+
+    assert.deepEqual(resultFromArray, resultFromBuffer);
 
   });
 
@@ -238,146 +256,153 @@ describe("Testing the sync input checking", function(){
 
 describe("Testing the sync encoding and decoding types", function(){
   it("should encode decode complex union", function(){
-    var complexBinary = avro.encodeDatum(complexUnion, 
-      { "A": {"x": {string: "a String"}}}
+    avro.addSchema(complexUnion);
+    var binary = avro.encodeDatum( 
+      { "x": {string: "a String"}, "namespace": "A"}
     );
-    var complexUnionResult = avro.decodeDatum(complexUnion,
-          complexBinary
-        );
-    expect({x: 'a String'}).toEqual(complexUnionResult);
+    var complexUnionResult = avro.decodeDatum(binary, "A");
+
+    assert.deepEqual({x: 'a String'}, complexUnionResult);
 
   });
 
   it("should encode decode a map", function(){
-    var sequence = avro.encodeDatum(map,
-      {sequence: [242, 192, 1]}
+    var binary = avro.encodeDatum(
+      {sequence: [242, 192, 1]},
+      map
     );
-    var mapResult = avro.decodeDatum(map,sequence);
-    expect({sequence: [242, 192, 1]}).toEqual(mapResult);
+    var mapResult = avro.decodeDatum(binary, map);
+    assert.deepEqual({sequence: [242, 192, 1]}, mapResult);
   });
 
   it("should encode decode union", function(){
-    var unionResult = avro.decodeDatum(union, avro.encodeDatum(union, { string: "we have a string"}));
-    expect("we have a string").toEqual(unionResult);
+    var binary = avro.encodeDatum(
+      { string: "we have a string"},
+      union
+      );
+    var unionResult = avro.decodeDatum(binary, union);
+
+    assert.equal("we have a string", unionResult);
 
   });
 
   it("should encode decode boolean", function(){
-    var booleanResult = avro.decodeDatum('"boolean"', avro.encodeDatum('"boolean"', true ));
-    expect(true).toEqual(booleanResult);
+    var binary = avro.encodeDatum(true, '"boolean"');
+    
+    var booleanResult = avro.decodeDatum(binary,'"boolean"');
+    assert.equal(true, booleanResult);
 
   });
 
   it("should encode decode arrays", function(){
     var arrayTestData = ["hello", "bye", "YOLO"];
-    var arrayResult = avro.decodeDatum(array, 
-      avro.encodeDatum(array, arrayTestData)
-      );
-    expect(arrayTestData).toEqual(arrayResult);
+    var binary = avro.encodeDatum(arrayTestData, array);
+
+    var arrayResult = avro.decodeDatum(binary, array);
+
+    assert.deepEqual(arrayTestData, arrayResult);
 
   });
 
   it("should encode decode long", function(){
-    var longResult = avro.decodeDatum('"long"', avro.encodeDatum('"long"', 12345));
-    expect(12345).toEqual(longResult);
+    var binary = avro.encodeDatum(12345, '"long"');
+
+    var longResult = avro.decodeDatum(binary, '"long"');
+
+    assert.equal(12345, longResult);
 
   });
 
   it("should encode decode string", function(){
-    var stringResult = avro.decodeDatum('"string"', avro.encodeDatum('"string"', "A string to parse" ));
-    expect("A string to parse").toEqual(stringResult);
+    var binary = avro.encodeDatum("A string to parse", '"string"');
+
+    var stringResult = avro.decodeDatum(binary, '"string"');
+
+    assert.equal("A string to parse", stringResult);
 
   });
 
   it("should encode decode fixed", function(){
-
-    var fixedResult = avro.decodeDatum(fixedExample, 
-      avro.encodeDatum(fixedExample, { 
+    var obj = {
           clientHash:  [ 120, 231, 49, 2, 125, 143, 213, 14, 214, 66, 52, 11, 124, 154, 99, 179 ],
           clientProtocol: { string: "client"},
           serverHash:  [ 120, 231, 49, 2, 125, 143, 213, 14, 214, 66, 52, 11, 124, 154, 99, 179 ],
           meta: null
-      })
-    );
+    };
 
-    expect(
-      { 
-        clientHash: [ 120, 231, 49, 2, 125, 143, 213, 14, 214, 66, 52,11, 124, 154, 99, 179 ],
-        clientProtocol: 'client',
-        serverHash: [ 120, 231, 49, 2, 125, 143, 213, 14, 214, 66, 52, 11, 124, 154, 99, 179 ],
-        meta: null 
-      }).toEqual(fixedResult);
+    var binary = avro.encodeDatum(obj, fixedExample);
+
+    var fixedResult = avro.decodeDatum(binary, fixedExample); 
+
+    assert.deepEqual(obj.clientHash, fixedResult.clientHash);
+    assert.deepEqual(obj.serverHash, fixedResult.serverHash);
+    assert.deepEqual(obj.meta, fixedResult.meta);
+    assert.deepEqual(obj.clientProtocol.string, fixedResult.clientProtocol);
   });
 
   it("should encode decode complex type", function(){
-    var complexResult = avro.decodeDatum(complexSchema, 
-        avro.encodeDatum(
-          complexSchema,
-          { id: { bytes: ([8,-85,-51,18,52]) }}
-        )
-    );
+    var obj = { id: { bytes: ([8, 171, 205, 18, 52]) }};
 
-    expect({id: {bytes: [8, 171, 205, 18, 52]}}).toEqual(complexResult);
+    var binary = avro.encodeDatum(obj, complexSchema);
+    var complexResult = avro.decodeDatum(binary,complexSchema); 
+
+    assert.deepEqual(obj, complexResult);
 
   });
 
+  
   it("should encode deocde schema handshake", function(){
-    var handshakeResponseResult = avro.decodeDatum(handshakeResponse, 
-      avro.encodeDatum(handshakeResponse, {
+    var obj = {
         match: "CLIENT",
         serverProtocol: null,
         serverHash: null,
         meta: null    
-      })
-    );
+    }
 
-    expect({match: 1, serverProtocol: null, serverHash: null, meta: null}).toEqual(handshakeResponseResult);
+    var binary = avro.encodeDatum(obj, handshakeResponse);
+
+    var result = avro.decodeDatum(binary, handshakeResponse); 
+
+    assert.deepEqual({match: 1, serverProtocol: null, serverHash: null, meta: null}, result);
   });
 
-
-  it("should support scalavro reference type", function(){
-    //This is the a byte stream representing what a reference would 
-    //look like for the personExample schema
-    var referenceScalavroType = avro.decodeDatum(personExample,
-      [
-        20,0, 6, 66, 101, 110, 0, 12, 67, 111, 110, 110, 111, 
-        114, 0, 10, 78, 105, 97, 108, 108, 2, 0, 0, 8, 66, 
-        114, 97, 100, 2, 4, 2, 6, 2, 4, 2, 2, 2, 0, 0 
-        ]
-      );
-    var array = [
-      { name: 'Ben' },
-      { name: 'Connor' },
-      { name: 'Niall' },
-      { name: 'Ben' },
-      { name: 'Brad' },
-      { name: 'Niall' },
-      { name: 'Brad' },
-      { name: 'Niall' },
-      { name: 'Connor' },
-      { name: 'Ben' } ];
-  
-    expect(array).toEqual(referenceScalavroType);
-
-  });
 
   it("should support linked lists", function(){
 
-    var linkedListType = avro.decodeDatum(linkedList,
+    var linkedListType = avro.decodeDatum(
       [
         6, 111, 110, 101, 2, 0, 6, 116, 119,
         111, 2, 0, 10, 116, 104, 114, 101, 101,
         2, 0, 8, 102, 111, 117, 114, 0
-        ]
+        ], 
+      linkedList
       );
     //At this time linkedList schema can not be resolved by
     // C++ implementation of Avro
-    expect(true).toEqual(false);
+    console.log(linkedListType);
+    assert.equal(true, false);
 
   });
 
 
   it("should support reference objects", function(){
+    var ToyBox = function ToyBox(contents){
+      Object.defineProperty(this, "namespace",{
+        value: "com.gensler.scalavro.test.ToyBox"
+      });
+      Object.defineProperty(this, "contents", {
+        enumerable: true,
+        get: function(){
+          return _contents;
+        },
+        set: function(val){
+          _contents = val;
+        }
+      });
+      var _contents;
+      this.contents = contents;
+    }
+
     var Toy = function Toy(name){
       Object.defineProperty(this, "namespace",{
         value: "com.gensler.scalavro.test.Toy"
@@ -397,7 +422,7 @@ describe("Testing the sync encoding and decoding types", function(){
     }
 
     var dinosaur = new Toy('dinosaur');
-    var contents = { contents: [
+    var contents = [
       new Toy('doll'),
       new Toy('truck'),
       dinosaur,
@@ -406,11 +431,13 @@ describe("Testing the sync encoding and decoding types", function(){
       dinosaur,
       dinosaur,
       dinosaur
-    ]
-    };
-    var toyBoxType = avro.encodeDatum(toyBox,contents);
-    var result = (avro.decodeDatum(toyBox,toyBoxType));
-    expect(contents).toEqual(result);
+    ];
+    var box = new ToyBox(contents);
+
+    avro.addSchema(toyBox);
+    var binary = avro.encodeDatum(box);
+    var result = avro.decodeDatum(binary, "com.gensler.scalavro.test.ToyBox");
+    assert.deepEqual(box, result);
 
   });
 
@@ -430,23 +457,14 @@ describe("Testing the sync encoding and decoding types", function(){
       var _bytes;
       this.bytes = bytes;
     }
-
-    var guid = new GUID([8,-85,-51,18,52]);
+    var guid = new GUID([8, 171, 205, 18, 52]);
     var obj = {id: guid};
 
-    var encodedRequestType = avro.encodeDatum(
-          requestSchema, obj
-        );
-    var guid2 = new GUID([2,3,4,4,5,6,7,7]);
-    obj.id = guid2;
+    var binary = avro.encodeDatum(obj, requestSchema);
 
-    var encodedRequestType = avro.encodeDatum(
-          requestSchema, obj
-        );
+    var requestType = avro.decodeDatum(binary, requestSchema); 
 
-    var requestType = avro.decodeDatum(requestSchema, 
-          encodedRequestType);
-    expect(obj).toEqual(requestType);
+    assert.deepEqual(obj, requestType);
   });
 
   avro.close();

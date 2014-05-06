@@ -10,15 +10,15 @@ A wrapper for the c++ implemenation of Avro.
 
 ###Avro sync
 
-  avro.encodeDatum(schema, value);
+  avro.encodeDatum(value, schema);
 
-  avro.decodeDatum(schema, [/*array of bytes*/]);
+  avro.decodeDatum([/*array of bytes*/], schema);
 
 #####Example
 	var addon = require('../build/Release/avro');
     var avro = new addon.Avro();
-    var bytes = avro.encodeDatum('"double"', 12345.89);
-    var result = avro.decodeDatum('"double"', bytes);
+    var bytes = avro.encodeDatum(12345.89, '"double"');
+    var result = avro.decodeDatum(bytes, '"double"');
 	avro.close();
 
 The result will contain the value that we encoded.

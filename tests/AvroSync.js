@@ -43,7 +43,6 @@ var buildingSchema = '{\
     "name":"id"}\
  ]}';
 
-
 var requestSchema = '{\
     "type":"record",\
     "name":"properties.GetProperty",\
@@ -88,6 +87,20 @@ var array = '{\
   "name": "com.common.test.array",\
   "type": "array",\
   "items": "string"\
+}';
+
+var arrayOfRecords = '{\
+  "name": "com.common.test.arrayOfRecords",\
+  "name": "contents",\
+  "type": "array",\
+  "items": {\
+    "name": "B",\
+    "type": "record",\
+    "fields": [{\
+      "name": "x",\
+      "type": "string"\
+    }]\
+  }\
 }';
 
 
@@ -184,7 +197,7 @@ var complexSchema = '{\
 }';
 
 var complexUnion = '[{\
-  "name": "A",\
+  "name": "com.common.test.complexUnion",\
   "type": "record",\
   "fields": [{"name": "x", "type": ["int", "string"]}]\
   }, {\
@@ -194,6 +207,36 @@ var complexUnion = '[{\
   }]';
 
 var union ='["string", "double"]';
+
+var veryComplexRecord = '{\
+  "name": "nutcracker",\
+  "type": "record",\
+  "fields": [\
+    {\
+      "type": {\
+        "type": "map",\
+        "values": {\
+          "type": "array",\
+          "items": [\
+            {\
+              "name": "A",\
+              "type": "record",\
+              "fields": [{"name": "x", "type": "string"}]\
+            },\
+            {\
+              "name": "B",\
+              "type": "record",\
+              "fields": [{"name": "x", "type": "string"}]\
+            }\
+          ]\
+        }\
+      },\
+      "name": "result"\
+    }\
+  ]\
+  }';
+
+    
 
 var handshakeResponse = '{\
     "type": "record",\
@@ -213,6 +256,29 @@ var handshakeResponse = '{\
   }';
 
 var map = '{"type": "map","values": "bytes"}';
+
+var mapToArray = '{\
+  "name": "mapToArray",\
+  "type": "map",\
+  "values": {\
+    "type": "array",\
+    "items": "string"\
+  }\
+}';
+
+var mapToArrayOfRecords = '{\
+  "name": "mapToArray",\
+  "type": "map",\
+  "values": {\
+    "type": "array",\
+    "items":\
+      {\
+        "name": "B",\
+        "type": "record",\
+        "fields": [{"name": "x", "type": "string"}]\
+      }\
+  }\
+}';
 // Some of the types supported
 // TODO finish off examples.
 describe("Testing the sync input checking", function(){
@@ -243,36 +309,111 @@ describe("Testing the sync input checking", function(){
   it("should allow array of bytes or a nodejs Buffer for decodeDatum", function(){
     avro.addSchema(complexUnion);
     var binary = avro.encodeDatum( 
-      { "x": {string: "a String"}, namespace: "A"}
+      { "x": {string: "a String"}, namespace: "com.common.test.complexUnion"}
     );
-    var resultFromArray = avro.decodeDatum(binary,"A");
-    var resultFromBuffer = avro.decodeDatum(new Buffer(binary), "A");
+    var resultFromArray = avro.decodeDatum(binary,"com.common.test.complexUnion");
+    var resultFromBuffer = avro.decodeDatum(new Buffer(binary), "com.common.test.complexUnion");
 
     assert.deepEqual(resultFromArray, resultFromBuffer);
 
   });
 
-})
+});
+
+describe("Testing the avro type dictionary", function(){
+
+  /**
+    * Needed right now until the dictionary is fixed.
+    */
+  beforeEach(function(){
+    avro.clearDictionary();
+  });
+
+  it("should be able to add two schemas of the same type", function(){
+    avro.addSchema(complexUnion);
+    avro.addSchema(complexUnion);
+    var object = { "x": {string: "a String"}, "namespace": "com.common.test.complexUnion"}
+
+    var binary = avro.encodeDatum(object, "com.common.test.complexUnion");
+    var result = avro.decodeDatum(binary, "com.common.test.complexUnion");
+
+    assert.deepEqual(result, {x: "a String"});
+    
+  });
+
+  it("should be able to addSchema and encodeDatum the same way", function(){
+    avro.addSchema(complexUnion);
+    var object = { "x": {string: "a String"}, "namespace": "com.common.test.complexUnion"}
+
+    var binaryAddSchema = avro.encodeDatum(object, "com.common.test.complexUnion");
+    var resultAddSchema = avro.decodeDatum(binaryAddSchema, "com.common.test.complexUnion");
+
+    var binary = avro.encodeDatum(object, complexUnion);
+    var result = avro.decodeDatum(binary, complexUnion);
+
+    assert.deepEqual(result, resultAddSchema);
+
+  });
+
+});
 
 describe("Testing the sync encoding and decoding types", function(){
+
+  /**
+    * Needed right now until the dictionary is fixed.
+    */
+  beforeEach(function(){
+    avro.clearDictionary();
+  });
+
   it("should encode decode complex union", function(){
     avro.addSchema(complexUnion);
-    var binary = avro.encodeDatum( 
-      { "x": {string: "a String"}, "namespace": "A"}
-    );
-    var complexUnionResult = avro.decodeDatum(binary, "A");
+    var object = { "x": {string: "a String"}, "namespace": "com.common.test.complexUnion"}
+
+    var binary = avro.encodeDatum(object, "com.common.test.complexUnion");
+    var complexUnionResult = avro.decodeDatum(binary, "com.common.test.complexUnion");
 
     assert.deepEqual({x: 'a String'}, complexUnionResult);
 
   });
 
   it("should encode decode a map", function(){
-    var binary = avro.encodeDatum(
-      {sequence: [242, 192, 1]},
-      map
-    );
+    var object = 
+      {
+        sequence: [242, 192, 1],
+        sequence2: [32, 23, 2]
+      };
+    var binary = avro.encodeDatum(object, map);
     var mapResult = avro.decodeDatum(binary, map);
-    assert.deepEqual({sequence: [242, 192, 1]}, mapResult);
+    assert.deepEqual(object, mapResult);
+  });
+
+  it("should encode decode an map with the value of array", function(){
+    var object = 
+      {
+        array1: ["hello", "how", "are", "you"]
+      };
+    var binary = avro.encodeDatum(object, mapToArray);
+    var mapResult = avro.decodeDatum(binary, mapToArray);
+    assert.deepEqual(object, mapResult);
+  });
+
+  it("should encode decode an map with the value of an array of records", function(){
+    var object = 
+      {
+        array1: [
+          { 
+            "x": "hello"
+          },
+          { 
+            "x": "bye"
+          }
+        ]
+      };
+    var binary = avro.encodeDatum(object, mapToArrayOfRecords);
+    var mapResult = avro.decodeDatum(binary, mapToArrayOfRecords);
+    assert.deepEqual(object, mapResult);
+
   });
 
   it("should encode decode union", function(){
@@ -294,15 +435,37 @@ describe("Testing the sync encoding and decoding types", function(){
 
   });
 
+
   it("should encode decode arrays", function(){
-    var arrayTestData = ["hello", "bye", "YOLO"];
-    var binary = avro.encodeDatum(arrayTestData, array);
+    var object= ["hello", "bye", "YOLO"];
 
-    var arrayResult = avro.decodeDatum(binary, array);
+    var binary = avro.encodeDatum(object, array);
+    var result= avro.decodeDatum(binary, array);
 
-    assert.deepEqual(arrayTestData, arrayResult);
+    assert.deepEqual(result, object);
 
   });
+
+  it("should encode decode array of records", function(){
+    var object = 
+      [
+        {
+          "namespace": "B",
+          "x": "hello"
+        },
+        {
+          "namespace": "B",
+          "x": "bye"
+        }
+      ];
+
+    var binary = avro.encodeDatum(object, arrayOfRecords);
+    var result = avro.decodeDatum(binary, arrayOfRecords);
+
+    assert.deepEqual(result, [{x: "hello"},{x: "bye"}]);
+
+  });
+ 
 
   it("should encode decode long", function(){
     var binary = avro.encodeDatum(12345, '"long"');
@@ -350,8 +513,31 @@ describe("Testing the sync encoding and decoding types", function(){
 
   });
 
-  
-  it("should encode deocde schema handshake", function(){
+  it("should encode decode a 'very' complex type", function(){
+    var obj = {
+      "result": {
+        "akey": [
+          {
+            "namespace": "A",
+            "x": "Hello"
+          },
+          {
+            "namespace": "A",
+            "x": "bye"
+          },
+        
+        ]
+      }
+    };
+
+    var binary = avro.encodeDatum(obj, veryComplexRecord);
+    var result = avro.decodeDatum(binary, veryComplexRecord);
+
+    assert.deepEqual(result,{result: { akey: [{x: "Hello"}, {x: "bye"} ]}});
+
+  });
+
+  it("should encode decode schema handshake", function(){
     var obj = {
         match: "CLIENT",
         serverProtocol: null,
@@ -379,7 +565,7 @@ describe("Testing the sync encoding and decoding types", function(){
       );
     //At this time linkedList schema can not be resolved by
     // C++ implementation of Avro
-    console.log(linkedListType);
+    //console.log(linkedListType);
     assert.equal(true, false);
 
   });

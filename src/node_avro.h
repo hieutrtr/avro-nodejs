@@ -49,6 +49,7 @@ public:
   static void Initialize(Handle<Object> target);
 private: 
   static Handle<Value> New(const Arguments& args);
+  static Handle<Value> ClearDictionary(const Arguments& args);
   static Handle<Value> QueueSchema(const Arguments &args);
   static Handle<Value> AddSchema(const Arguments &args);
   static Handle<Value> PendingSchemas(const Arguments &args);

@@ -240,6 +240,21 @@ Handle<Value> Avro::AddSchema(const Arguments &args){
   return scope.Close(Undefined());
 }
 
+
+/**
+ *
+ *
+ */
+Handle<Value> Avro::ClearDictionary(const Arguments &args){
+  HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+
+  //clear the dictionary
+  ctx->dictionary_.clear();
+
+  return scope.Close(Undefined());
+}
+
 /**
  * Takes a avro data file that must contain the schema definition
  * as part of the file. For each datum that is parsed out of the file
@@ -638,6 +653,8 @@ void Avro::Initialize(Handle<Object> target){
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeFile", Avro::DecodeFile);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "addSchema", Avro::AddSchema);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "clearDictionary", Avro::ClearDictionary);
+
 
   NODE_SET_PROTOTYPE_METHOD(a_temp, "push", Avro::Push);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "bufferLength", Avro::BufferLength);

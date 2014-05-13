@@ -84,18 +84,18 @@ Handle<Value> DecodeAvro(const GenericDatum& datum,  Local<Array> reference){
         const GenericMap &genMap = datum.value<GenericMap>();
 
         const vector < std::pair < std::string, GenericDatum > > &v = genMap.value();
-        Local<Array> datumArray = Array::New();
+        Handle<Object> datumMap = Object::New();
         int i = 0;
         for(vector< std::pair < std::string, GenericDatum> >::const_iterator it = v.begin(); it != v.end(); ++it) {
           const std::pair < std::string, GenericDatum> &itDatum = * it;
-          datumArray->Set(v8::String::New(
-            itDatum.first.c_str(),
-            itDatum.first.size()
-            ),DecodeAvro(itDatum.second, reference));
+          Local<String> datumName = String::New(itDatum.first.c_str(), itDatum.first.size());
+
+          Handle<Value> tmp = DecodeAvro(itDatum.second, reference);
+          datumMap->Set(datumName, tmp);
 
           i++;
         }
-        return datumArray;
+        return datumMap;
       }
 
     case AVRO_FIXED:

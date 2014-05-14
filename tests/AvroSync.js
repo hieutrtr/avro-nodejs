@@ -196,6 +196,14 @@ var complexSchema = '{\
   ]\
 }';
 
+var complexSchemaWithDefault = '{\
+  "name": "hasDefault",\
+  "type": "record",\
+  "fields": [\
+    { "name": "age", "type": "int", "default": -1}\
+  ]\
+}';
+
 var complexUnion = '[{\
   "name": "com.common.test.complexUnion",\
   "type": "record",\
@@ -235,6 +243,152 @@ var veryComplexRecord = '{\
     }\
   ]\
   }';
+
+var drawingLayerAreasResult = '{\
+    "type":"record",\
+      "name":"com.gensler.drawings.DrawingLayerAreasResult",\
+      "fields":[{\
+        "type":{\
+        "type":"map",\
+        "values":{\
+          "type":"array",\
+          "items":[{\
+            "type":"record",\
+            "name":"com.gensler.units.UnitMetadata",\
+            "fields":[{\
+              "type":[\
+                {\
+                  "type":"record",\
+                  "name":"com.gensler.models.common.GUID",\
+                  "fields":[{\
+                    "type":"bytes",\
+                    "name":"bytes"\
+                  }]\
+                },\
+                {\
+                  "type":"record",\
+                  "name":"com.gensler.scalavro.Reference",\
+                  "fields":[\
+                    {\
+                      "type":"long",\
+                      "name":"id"\
+                    }\
+                  ]\
+                }\
+              ],\
+              "name":"layerId"\
+            },\
+            {\
+              "type":["com.gensler.models.common.GUID", "com.gensler.scalavro.Reference"],\
+              "name":"drawingId"\
+            },\
+            {\
+              "type":"long",\
+              "name":"handle"\
+            },\
+            {\
+              "type":"double",\
+              "name":"area"\
+            },\
+            {\
+              "type":[\
+                {\
+                  "type":"record",\
+                  "name":"com.gensler.geometry.Polygon",\
+                  "fields":[\
+                    {\
+                      "type":[\
+                        {\
+                          "type":"record",\
+                          "name":"com.gensler.geometry.ClosedPolyline",\
+                          "fields":[\
+                            {\
+                              "type":{\
+                                "type":"array",\
+                                "items":[\
+                                  {\
+                                    "type":"record",\
+                                    "name":"com.gensler.geometry.Vertex",\
+                                    "fields":[\
+                                      {\
+                                        "type":[\
+                                          {\
+                                            "type":"record",\
+                                            "name":"com.gensler.geometry.Point",\
+                                            "fields":[\
+                                              {\
+                                                "type":"double",\
+                                                "name":"x"\
+                                              },\
+                                              {\
+                                                "type":"double",\
+                                                "name":"y"\
+                                              }\
+                                            ]\
+                                          },\
+                                          {\
+                                            "type":"record",\
+                                            "name":"com.gensler.scalavro.Reference",\
+                                            "fields":[\
+                                              {\
+                                                "type":"long",\
+                                                "name":"id"\
+                                              }\
+                                            ]\
+                                          }\
+                                        ],\
+                                        "name":"point"\
+                                      },\
+                                      {\
+                                        "type":"double",\
+                                        "name":"includedAngle"\
+                                      }\
+                                    ]\
+                                  },\
+                                  {\
+                                    "type":"record",\
+                                    "name":"com.gensler.scalavro.Reference",\
+                                    "fields":[\
+                                      {\
+                                        "type":"long",\
+                                        "name":"id"\
+                                      }\
+                                    ]\
+                                  }\
+                                ]\
+                              },\
+                              "name":"vertices"\
+                            }\
+                          ]\
+                        },\
+                        "com.gensler.scalavro.Reference"\
+                      ],\
+                      "name":"outerRing"\
+                    },\
+                    {\
+                      "type":{\
+                        "type":"array",\
+                        "items":[\
+                          "com.gensler.geometry.ClosedPolyline",\
+                          "com.gensler.scalavro.Reference"\
+                        ]\
+                      },\
+                      "name":"innerRings"\
+                    }\
+                  ]\
+                },\
+                "com.gensler.scalavro.Reference"\
+              ],\
+              "name":"cadUnit"\
+            }\
+          ]\
+        },\
+        "com.gensler.scalavro.Reference"\
+      ]\
+    }\
+  },\
+  "name":"result"\
+}]}';
 
     
 
@@ -353,6 +507,39 @@ describe("Testing the avro type dictionary", function(){
 
     assert.deepEqual(result, resultAddSchema);
 
+  });
+
+});
+
+
+describe("Testing the schema to object that is passed in", function(){
+  /**
+    * Needed right now until the dictionary is fixed.
+    */
+  beforeEach(function(){
+    avro.clearDictionary();
+  });
+  it("should not error out with extra parameters in object", function(){
+    var object = { "b": {string: "another string?"}, "x": {string: "a String"}, "namespace": "com.common.test.complexUnion"}
+    var binary = avro.encodeDatum(object, complexUnion);
+    var result = avro.decodeDatum(binary, complexUnion);
+
+    assert.deepEqual(result, {x: "a String"});
+
+  });
+
+  it("should error out when a required parameter is missing in object", function(done){
+    var avroInput = new addon.Avro();
+
+    avroInput.onerror = function(error){
+      assert.equal(error, "MissingDatumField: x");
+      done();
+    }
+
+    var object = { "b": {string: "another string?"}, "namespace": "com.common.test.complexUnion"}
+    var binary = avroInput.encodeDatum(object, complexUnion);
+
+    avroInput.close();
   });
 
 });
@@ -537,6 +724,55 @@ describe("Testing the sync encoding and decoding types", function(){
 
   });
 
+  it("should encode decode drawingLayerAreasResult", function(){
+    var resultObject = {"result":{"akey":[{"layerId":{"bytes":[19,140,42,58,61,158,72,167,175,62,238,189,142,228,101,80]},"drawingId":{"bytes":[19,140,42,58,61,158,72,167,175,62,238,189,142,228,101,80]},"handle":8,"area":4,"cadUnit":{"outerRing":{"vertices":[{"point":{"x":4,"y":5},"includedAngle":0}]},"innerRings":[]}}]}};
+    var object = {
+      "result": {
+        "akey": [
+          {
+            "namespace": "com.gensler.units.UnitMetadata",
+            "layerId": {
+              namespace: "com.gensler.models.common.GUID",                          
+              "bytes":                                                    
+                  [19,140,42,58,61,158,72,167,175,62,238,189,142,228,101,80]
+            },                                                            
+            "drawingId": {                           
+              namespace: "com.gensler.models.common.GUID",                          
+              "bytes":                                                    
+                  [19,140,42,58,61,158,72,167,175,62,238,189,142,228,101,80]
+            },                                                             
+            "handle": 8,
+            "area": 4.0,
+            "cadUnit": {
+              "namespace": "com.gensler.geometry.Polygon",
+              "innerRings": [],
+              "outerRing": {
+                "namespace": "com.gensler.geometry.ClosedPolyline",
+                "vertices": [
+                  {
+                    "namespace": "com.gensler.geometry.Vertex",
+                    "point": {
+                      "namespace": "com.gensler.geometry.Point",
+                      "x": 4,
+                      "y": 5
+                    },
+                    "includedAngle": 0.0
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    };
+    
+    var binary = avro.encodeDatum(object, drawingLayerAreasResult); 
+    var result = avro.decodeDatum(binary, drawingLayerAreasResult);
+
+    assert.deepEqual(result, resultObject); 
+
+  });
+
   it("should encode decode schema handshake", function(){
     var obj = {
         match: "CLIENT",
@@ -628,21 +864,7 @@ describe("Testing the sync encoding and decoding types", function(){
   });
 
   it("should be able to parse a request schema", function(){
-    var GUID = function GUID(bytes){
-      Object.defineProperty(this, "namespace",{value: "models.common.GUID"});
-      Object.defineProperty(this, "bytes", {
-        enumerable: true,
-        get: function(){
-          return _bytes;
-        },
-        set: function(val){
-          _bytes = val;
-        }
-      });
-      
-      var _bytes;
-      this.bytes = bytes;
-    }
+    
     var guid = new GUID([8, 171, 205, 18, 52]);
     var obj = {id: guid};
 
@@ -656,3 +878,18 @@ describe("Testing the sync encoding and decoding types", function(){
   avro.close();
 });
 
+var GUID = function GUID(bytes){
+  Object.defineProperty(this, "namespace",{value: "models.common.GUID"});
+  Object.defineProperty(this, "bytes", {
+    enumerable: true,
+    get: function(){
+      return _bytes;
+    },
+    set: function(val){
+      _bytes = val;
+    }
+  });
+  
+  var _bytes;
+  this.bytes = bytes;
+}

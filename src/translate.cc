@@ -1,6 +1,5 @@
 #include "translate.h"
 
-
 Handle<Value> DecodeAvro(const GenericDatum& datum){
   return DecodeAvro(datum, Array::New());
 }
@@ -189,6 +188,13 @@ GenericDatum DecodeV8(GenericDatum datum, Local<Value> object, vector<int> *refe
         for(uint i = 0; i<record.fieldCount(); i++){
           //Add values
           Local<v8::String> datumName = v8::String::New(node->nameAt(i).c_str(), node->nameAt(i).size());
+          if(!obj->Has(datumName)){
+            std::stringstream ss;
+            v8::String::Utf8Value datumNameCstr(datumName);
+            ss << "MissingDatumField: "<< *datumNameCstr;
+            throw MissingDatumFieldException(ss.str()); 
+          }
+
           datum.value<GenericRecord>().fieldAt(i) = DecodeV8(record.fieldAt(i), obj->Get(datumName), reference);
         }
         reference->push_back(identityHash);

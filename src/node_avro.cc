@@ -17,7 +17,8 @@ static void OnError(Avro *ctx, Persistent<Value> callback, const char* error);
 static void OnSchema(Avro *ctx, const char* schema);
 static void OnClose(Avro *ctx, Persistent<Value> callback);
 static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum);
-void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int startPos);
+static void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int startPos);
+
 
 /**
  * Constructs a new avro object. Creates new worker thread and async callbacks
@@ -398,6 +399,7 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
     schema = getValidSchema(*typeString, *schemaString, ctx->dictionary_); 
 
     GenericDatum datum(schema);
+
     datum = DecodeV8(datum, value);
 
     e = validatingEncoder(schema, binaryEncoder());
@@ -416,6 +418,11 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
       byteArray->Set(i, Uint32::New(reader.read()));
       i++;
     }
+  }catch(MissingDatumFieldException &e){
+    string error = e.what();
+    OnError(ctx, on_error, error.c_str());
+    return scope.Close(Array::New());
+    
   }catch(std::exception &e){
     string error = e.what();
     string errorMessage = error + *schemaString + "\n";

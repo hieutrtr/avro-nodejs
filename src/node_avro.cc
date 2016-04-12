@@ -47,7 +47,7 @@ Handle<Value> Avro::New(const Arguments& args){
     uv_queue_work(ctx->avro_loop_,
                   work_req,
                   Process,
-                  After);  
+                  After);
 
     return args.This();
 }
@@ -60,7 +60,7 @@ Handle<Value> Avro::New(const Arguments& args){
 static void ResultEvent(uv_async_t *handle, int status) {
   Avro* ctx = (Avro *)handle->data;
   // loop through datums then release lock.
-  // Thread safe block here 
+  // Thread safe block here
   // ---------------------------------------------------------------------
   uv_mutex_lock(&ctx->datumLock_);
   for(size_t i = 0;i < ctx->datums_.size();i++){
@@ -101,16 +101,16 @@ Handle<Value> Avro::Close(const Arguments &args){
   //ctx->decoder_.reset();
   uv_sem_post(&ctx->sem_);
   uv_mutex_unlock(&ctx->queueLock_);
-  
-  uv_run(ctx->avro_loop_, UV_RUN_DEFAULT); 
 
-  //fires off the on close event. 
+  uv_run(ctx->avro_loop_, UV_RUN_DEFAULT);
+
+  //fires off the on close event.
   OnClose(ctx, on_close);
   return scope.Close(Undefined());
 }
 
 /**
- * Add a schema onto the schema queue. This is then processes 
+ * Add a schema onto the schema queue. This is then processes
  * in the loop
  */
 Handle<Value> Avro::QueueSchema(const Arguments &args){
@@ -129,7 +129,7 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
   try{
     baton.schema = getValidSchema(*schemaString, *schemaString, ctx->dictionary_);
 
-    // if args > 2 and args[1] is a function set our onSuccess  
+    // if args > 2 and args[1] is a function set our onSuccess
     handleCallbacks(ctx, &baton, args, 1);
 
     // ------------------------------------------------
@@ -141,10 +141,10 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
     uv_sem_post(&ctx->sem_);
     uv_mutex_unlock(&ctx->queueLock_);
     // ------------------------------------------------
-    // release lock 
-    // 
+    // release lock
+    //
   }catch(std::exception &e){
-    //TODO should send back the bad schema for user reference. 
+    //TODO should send back the bad schema for user reference.
     printf("an exception for the schema\n");
     OnError(ctx, on_error, e.what());
     return scope.Close(Undefined());
@@ -154,7 +154,7 @@ Handle<Value> Avro::QueueSchema(const Arguments &args){
 
 
 /**
- * Gets the number of schemas that are queued.  
+ * Gets the number of schemas that are queued.
  */
  Handle<Value> Avro::PendingSchemas(const Arguments &args){
   HandleScope scope;
@@ -180,7 +180,7 @@ Handle<Value> Avro::Push(const Arguments &args){
       // ------------------------------------------------
       // lock section here adding to BufferedInputStream.
       //uv_mutex_lock(&ctx->datumLock_);
-      std::vector<uint8_t> bytes = helper::getBinaryData(args[0]); 
+      std::vector<uint8_t> bytes = helper::getBinaryData(args[0]);
 
       //get data of the buffer
       uint8_t *in = bytes.data();
@@ -188,12 +188,12 @@ Handle<Value> Avro::Push(const Arguments &args){
 
       ctx->buffer_->append(in,bytes.size());
 
-      //uv_mutex_unlock(&ctx->datumLock_); 
-      // release lock section here.      
+      //uv_mutex_unlock(&ctx->datumLock_);
+      // release lock section here.
       // ------------------------------------------------
 
   }catch(std::exception &e){
-    //TODO should send back the bad schema for user reference. 
+    //TODO should send back the bad schema for user reference.
     OnError(ctx, on_error, e.what());
     return scope.Close(Undefined());
   }
@@ -211,7 +211,7 @@ Handle<Value> Avro::BufferLength(const Arguments &args){
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
 
   return scope.Close(Number::New(ctx->buffer_->size()));
-   
+
 }
 
 
@@ -259,11 +259,11 @@ Handle<Value> Avro::ClearDictionary(const Arguments &args){
 /**
  * Takes a avro data file that must contain the schema definition
  * as part of the file. For each datum that is parsed out of the file
- * OnDatum will be called. 
+ * OnDatum will be called.
  * @param avrofile [The file containing the Avro data and schema. ]
- * TODO to be depricated functionality being moved over to AvroReadFile. 
+ * TODO to be depricated functionality being moved over to AvroReadFile.
  */
-Handle<Value> Avro::DecodeFile(const Arguments &args) {  
+Handle<Value> Avro::DecodeFile(const Arguments &args) {
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
 
@@ -272,7 +272,7 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
     return scope.Close(Undefined());
   }
   datumBaton baton;
-    // if args > 2 and args[1] is a function set our onSuccess  
+    // if args > 2 and args[1] is a function set our onSuccess
   handleCallbacks(ctx, &baton, args, 1);
 
   if(args[0]->IsString()){
@@ -282,14 +282,14 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
     try{
       avro::DataFileReader<avro::GenericDatum> dfr(*filename);
       ValidSchema schema = dfr.dataSchema();
-      
+
       std::ostringstream oss(std::ios_base::out);
       avro::GenericDatum datum(dfr.dataSchema());
 
       while(dfr.read(datum)){
         OnDatum(ctx, baton.onSuccess, DecodeAvro(datum));
       }
-      
+
       if(baton.onSuccess->IsFunction()){
         baton.onSuccess.Dispose();
       }
@@ -303,7 +303,7 @@ Handle<Value> Avro::DecodeFile(const Arguments &args) {
   return scope.Close(Undefined());
 }
 /**
- * The sync version of decode datum. The buffer of bytes provided must 
+ * The sync version of decode datum. The buffer of bytes provided must
  * contain the entire datum to be decoded. Otherwise an error will be thrown.
  * @param bytes [A node Buffer object containing all of the bytes of the datum.]
  * @param type [A string representing the type to be decoded]
@@ -317,7 +317,7 @@ Handle<Value> Avro::DecodeDatum(const Arguments &args){
 
   if(args.Length() < 2){
     OnError(ctx, on_error, "Wrong number of arguments");
-    return scope.Close(Undefined());        
+    return scope.Close(Undefined());
   }
   Local<String> type;
 
@@ -391,12 +391,12 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
     }else{
       objectType = args[1]->ToString();
     }
-    
+
     String::Utf8Value typeString(objectType);
 
     //Get the schema either from the dictionary or the provided
     //Schema (adding the schema if it has a type)
-    schema = getValidSchema(*typeString, *schemaString, ctx->dictionary_); 
+    schema = getValidSchema(*typeString, *schemaString, ctx->dictionary_);
 
     GenericDatum datum(schema);
 
@@ -405,7 +405,7 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
     e = validatingEncoder(schema, binaryEncoder());
     e->init(*out);
     encode(*e, datum);
-    
+
     //need to flush the bytes to the stream (aka out);
     e->flush();
 
@@ -422,7 +422,7 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
     string error = e.what();
     OnError(ctx, on_error, error.c_str());
     return scope.Close(Array::New());
-    
+
   }catch(std::exception &e){
     string error = e.what();
     string errorMessage = error + *schemaString + "\n";
@@ -436,11 +436,78 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
 }
 
 /**
- * A helper function to get a ValidSchema. 
+ * A synchronous function to encode a datum into avro binary
+ * @param datum [The datum to be encoded]
+ * @param (optional) schema [The schema to encode the datum with]
+ */
+bool Avro::Validate(const Arguments &args){
+  HandleScope scope;
+  Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+  ValidSchema schema;
+
+  if(args.Length()< 1){
+    OnError(ctx, on_error, "EncodeDatum: no value to encode");
+    return false;
+  }
+
+  if(args.Length() > 1 && !args[1]->IsString()){
+    OnError(ctx, on_error, "schema must be a string");
+    return false;
+  }
+
+  v8::String::Utf8Value schemaString(args[1]->ToString());
+  Local<Value> value = args[0];
+
+  try{
+    // The object (currently defined as namespace)
+    Local<String> objectType;
+
+    //if is object then see if there is a namespace else set type to schema
+    if(value->IsObject()){
+      Local<Object> object = value->ToObject();
+      //if namespace use that else use args[1] for type
+      if(object->Has(String::New("namespace"))){
+        objectType = object->Get(String::New("namespace"))->ToString();
+      }else{
+        objectType = args[1]->ToString();
+      }
+    }else{
+      objectType = args[1]->ToString();
+    }
+
+    String::Utf8Value typeString(objectType);
+
+    //Get the schema either from the dictionary or the provided
+    //Schema (adding the schema if it has a type)
+    schema = getValidSchema(*typeString, *schemaString, ctx->dictionary_);
+
+    GenericDatum datum(schema);
+
+    datum = DecodeV8(datum, value);
+
+  }catch(MissingDatumFieldException &e){
+    string error = e.what();
+    OnError(ctx, on_error, error.c_str());
+    return false;
+
+  }catch(std::exception &e){
+    string error = e.what();
+    string errorMessage = error + *schemaString + "\n";
+    OnError(ctx, on_error, errorMessage.c_str());
+    return false;
+  }
+
+  //construct a byte array to send back to the javascript
+
+  return true;
+}
+
+/**
+ * A helper function to get a ValidSchema.
  *
  * @param type. Is a possible mapping into the SymbolMap. If is found the schema associated with it is returned.
  * @param schemaString. The schema as a json string.
- * @param dictionary. The symbol map for known types to schema definitions. 
+ * @param dictionary. The symbol map for known types to schema definitions.
  */
 static ValidSchema getValidSchema(string type, string schemaString, helper::SymbolMap dictionary){
 
@@ -452,7 +519,7 @@ static ValidSchema getValidSchema(string type, string schemaString, helper::Symb
       return  *(new ValidSchema(it->second));
     }
   }catch(exception &e){
-    //not a valid name wish there was final 
+    //not a valid name wish there was final
   }
 
   ValidSchema schema;
@@ -497,8 +564,8 @@ static void Process(uv_work_t* work_req){
     }
         // Thread safe area here
     // ---------------------------------------------------------------
-    // mutex lock for writing to datum on avro object. 
-    // 
+    // mutex lock for writing to datum on avro object.
+    //
     uv_mutex_lock(&ctx->datumLock_);
 
     ctx->datums_.push_back(baton);
@@ -515,7 +582,7 @@ static void Process(uv_work_t* work_req){
 
 /**
  * This is the function that is called directly after the Process function
- * is finished. Currently it runs the entire lifetime of Avro instance. 
+ * is finished. Currently it runs the entire lifetime of Avro instance.
  * @param work_req [description]
  * @param status   [description]
  */
@@ -530,8 +597,8 @@ static void After(uv_work_t* work_req, int status){
 
 
 /**
- * Parses out the two callbacks for the arguments. It is assumed that they are 
- * defined in pairs. OnSuccess, OnError.  
+ * Parses out the two callbacks for the arguments. It is assumed that they are
+ * defined in pairs. OnSuccess, OnError.
  * @param ctx              [Our Avro Object]
  * @param baton            [the baton we're setting the callbacks on]
  * @param args             [The arguments]
@@ -549,7 +616,7 @@ void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int st
     baton->onSuccess = on_datum;
   }
   startPos++;
-  // set onerror callback for the proccess struct 
+  // set onerror callback for the proccess struct
   if(args.Length() > startPos+1 ){
     if(args[startPos]->IsFunction()){
       baton->onError = Persistent<Function>::New(Handle<Function>::Cast(args[startPos]));
@@ -567,14 +634,14 @@ void handleCallbacks(Avro *ctx, datumBaton *baton, const Arguments &args, int st
  * @param ctx [The avro object that we get the handle from]
  * @param callback [The call back that we return the data error message to]
  * @param error [error message]
- * 
+ *
  */
 static void OnError(Avro *ctx, Persistent<Value> callback, const char* error){
 
   Local<Value> args[1] = { String::New(error) };
   if(callback->IsFunction()){
     MakeCallback(ctx->handle_, Persistent<Function>::Cast(callback), 1, args);
-    //make sure to remove the callback. Actually don't do that here. 
+    //make sure to remove the callback. Actually don't do that here.
     //callback.Dispose();
   }else if(callback->IsString()){
     Local<Value> callback_v = ctx->handle_->Get(callback);
@@ -586,7 +653,7 @@ static void OnError(Avro *ctx, Persistent<Value> callback, const char* error){
     }
 
   }else{
-    printf("error wtf\n"); 
+    printf("error wtf\n");
   }
 }
 
@@ -621,7 +688,7 @@ static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum) 
   }else if(callback->IsString()){
     MakeCallback(ctx->handle_, Persistent<String>::Cast(callback), 1, args);
   }else{
-    printf("datum wtf\n"); 
+    printf("datum wtf\n");
   }
 }
 
@@ -645,7 +712,7 @@ static void OnDatum(Avro *ctx, Persistent<Value> callback, Handle<Value> datum) 
     }else{
       printf("close wtf\n");
     }
- } 
+ }
 
 /**
  * [Creates all of the possible calls from the javascript]
@@ -669,6 +736,7 @@ void Avro::Initialize(Handle<Object> target){
   NODE_SET_PROTOTYPE_METHOD(a_temp, "pendingSchemas", Avro::PendingSchemas);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "decodeDatum", Avro::DecodeDatum);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "encodeDatum", Avro::EncodeDatum);
+  NODE_SET_PROTOTYPE_METHOD(a_temp, "validate", Avro::Validate);
   NODE_SET_PROTOTYPE_METHOD(a_temp, "close", Avro::Close);
   a_temp->SetClassName(String::NewSymbol("Avro"));
   target->Set(String::NewSymbol("Avro"), a_temp->GetFunction());

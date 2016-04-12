@@ -4,11 +4,13 @@ A wrapper for the c++ implemenation of Avro.
 
 #The Why
 
-  Javascript is a async callback world so the avro library should play in that world. I've also seen far too many partially completed avro javascript projects on github. 
+  Javascript is a async callback world so the avro library should play in that world. I've also seen far too many partially completed avro javascript projects on github.
 
 #API
 
 ###Avro sync
+
+  avro.validate(value, schema);
 
   avro.encodeDatum(value, schema);
 
@@ -19,6 +21,7 @@ A wrapper for the c++ implemenation of Avro.
     var avro = new addon.Avro();
     var bytes = avro.encodeDatum(12345.89, '"double"');
     var result = avro.decodeDatum(bytes, '"double"');
+    var boo = avro.validate(Payload, '{"type":"record","name":"MsgAdStatusChanged","fields":[{"name":"ad_id","type":"int"},{"name":"list_id","type":["null","int"],"default":"null"},{"name":"token","type":["null","string"],"default":"null"},{"name":"remote_browser","type":["null","string"],"default":"null"},{"name":"remote_addr","type":["null","string"],"default":"null"},{"name":"newstatus","type":{"name":"NEWS_STATUS","type":"enum","symbols":["hidden","active","passive"]}}]}')
 	avro.close();
 
 The result will contain the value that we encoded.
@@ -29,10 +32,10 @@ The result will contain the value that we encoded.
 
   avro.push([/*array of bytes*/]);
 
-  Currently there is only async support for decoding avro. 
+  Currently there is only async support for decoding avro.
   The implementation is designed for the ability to queue multiple avro schemas to be
   decoded with queueSchema(). The push() function pushes bytes to the stream being parsed in a none blocking manor.
-  On the completion the call backs are called. 
+  On the completion the call backs are called.
 
 #####Example
 	var addon = require('../build/Release/avro');
@@ -45,13 +48,13 @@ The result will contain the value that we encoded.
         console.log(error);
       });
 
-    avro.push(message.binarydata);//message as defined by some stream or websocket. 
+    avro.push(message.binarydata);//message as defined by some stream or websocket.
 	avro.close();
 
 ###Closing
 
 The currently implementation is defined to keep getting input from queueSchema and push. So to close out the Avro object call.
-		
+
 		avro.close();
 
 
@@ -61,7 +64,7 @@ To run the tests you'll need to install mocha.
 
 	npm install mocha -g
 
-Once that is done just run the specified test. 
+Once that is done just run the specified test.
 
 	mocha tests/AvroSync.js
 
@@ -161,7 +164,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
-
-
-

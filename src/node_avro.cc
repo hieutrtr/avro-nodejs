@@ -440,7 +440,7 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
  * @param datum [The datum to be encoded]
  * @param (optional) schema [The schema to encode the datum with]
  */
-bool Avro::Validate(const Arguments &args){
+Handle<Value> Avro::Validate(const Arguments &args){
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
   ValidSchema schema;

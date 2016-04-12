@@ -58,7 +58,7 @@ private:
   static Handle<Value> DecodeFile(const Arguments &args);
   static Handle<Value> EncodeDatum(const Arguments &args);
   static Handle<Value> DecodeDatum(const Arguments &args);
-  static bool Validate(const Arguments &args);
+  static Handle<Value> Validate(const Arguments &args);
   static Handle<Value> Close(const Arguments &args);
 
 };

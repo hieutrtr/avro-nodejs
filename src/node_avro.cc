@@ -443,16 +443,19 @@ Handle<Value> Avro::EncodeDatum(const Arguments &args){
 Handle<Value> Avro::Validate(const Arguments &args){
   HandleScope scope;
   Avro * ctx = ObjectWrap::Unwrap<Avro>(args.This());
+  Local<Array> byteArray = Array::New();
   ValidSchema schema;
+  EncoderPtr e;
+  auto_ptr<avro::OutputStream> out = avro::memoryOutputStream();
 
   if(args.Length()< 1){
     OnError(ctx, on_error, "EncodeDatum: no value to encode");
-    return false;
+    return scope.Close(Array::New());
   }
 
   if(args.Length() > 1 && !args[1]->IsString()){
     OnError(ctx, on_error, "schema must be a string");
-    return false;
+    return scope.Close(Array::New());
   }
 
   v8::String::Utf8Value schemaString(args[1]->ToString());
@@ -485,21 +488,37 @@ Handle<Value> Avro::Validate(const Arguments &args){
 
     datum = DecodeV8(datum, value);
 
+    e = validatingEncoder(schema, binaryEncoder());
+    e->init(*out);
+    encode(*e, datum);
+
+    //need to flush the bytes to the stream (aka out);
+    e->flush();
+
+    auto_ptr<avro::InputStream> in = avro::memoryInputStream(*out);
+
+    avro::StreamReader reader(*in);
+    int i = 0;
+    // could initialize a buffer and then do a while read of x chunk say 4k
+    while(reader.hasMore()){
+      byteArray->Set(i, Uint32::New(reader.read()));
+      i++;
+    }
   }catch(MissingDatumFieldException &e){
     string error = e.what();
     OnError(ctx, on_error, error.c_str());
-    return false;
+    return scope.Close(Array::New());
 
   }catch(std::exception &e){
     string error = e.what();
     string errorMessage = error + *schemaString + "\n";
     OnError(ctx, on_error, errorMessage.c_str());
-    return false;
+    return scope.Close(Array::New());
   }
 
   //construct a byte array to send back to the javascript
 
-  return true;
+  return scope.Close(byteArray);
 }
 
 /**
